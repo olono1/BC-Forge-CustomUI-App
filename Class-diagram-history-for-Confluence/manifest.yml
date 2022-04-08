@@ -1,0 +1,22 @@
+modules:
+  macro:
+    - key: class-diagram-history-for-confluence-hello-world
+      resource: main
+      resolver:
+        function: resolver
+      title: Class diagram history for Confluence, by Olivier
+      description: Inserts Hello world!
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: static/hello-world/build
+app:
+  id: ari:cloud:ecosystem::app/13c130e9-c958-4cd9-bbbc-0e5ef6be914c
+permissions:
+  external:
+    fetch:
+      backend:
+        - "*.github.com"
+  scopes: [read:sprint:jira-software]
