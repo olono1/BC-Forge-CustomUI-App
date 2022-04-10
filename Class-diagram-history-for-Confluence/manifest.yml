@@ -19,4 +19,7 @@ permissions:
     fetch:
       backend:
         - "*.github.com"
+  content:
+    styles:
+      - 'unsafe-inline'
   scopes: [read:sprint:jira-software]
