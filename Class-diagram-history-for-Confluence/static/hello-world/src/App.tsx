@@ -16,6 +16,7 @@ import SvgComponent from './SvgMermaid';
 
 
 
+
 const DEFAULT_CONFIG = {
   startOnLoad: true,
 //  theme: "default",
@@ -157,26 +158,53 @@ const colors = [
 ];
 
 
+const getReposUserAuth = async() => {
+
+  console.log("Calling invoke function for user repos");
+
+  const response1 = await invoke('getReposUserAuth', {});
+  console.log("called!");
+  
+  console.log("Returning");
+  return response1;
+}
+
+
 
 function App() {
   const [data, setData] = useState(null);
-  const [reposUser, setReposUser] = useState([]);
+  const [reposUser, setReposUser] = useState(null);
+  const [reposUI, setReposUI] = useState([]);
 
   useEffect(() => {
     invoke('getText', { example: 'my-invoke-variable' }).then(setData);
-    invoke('getReposUserAuth', {}).then((res) => {console.log(res); setReposUser(res)});
-    
+    invoke('getReposUserAuth', {}).then((res) => {setReposUser(res)});
+    //setReposUser(async () => {return await getReposUserAuth()});
     console.log(reposUser);
+    
   }, []);
 
   useEffect (()=>{
-    console.log(reposUser);
+    
+
+    if (reposUser !== null){
+      var selectReposOptions = [];
+      reposUser.forEach(repo => {
+        selectReposOptions.push({label: repo, value: repo});
+      });
+      console.log(selectReposOptions);
+      setReposUI(selectReposOptions);
+      
+    }
+
+
+
   }, [reposUser])
 
   return (
     <div>
       {data ? data : 'Loading...'}
-
+      {reposUser ? 'Loaded' : 'Loading...ReposUser' }
 
 
       <Form<Category>
@@ -191,7 +219,7 @@ function App() {
                   <Fragment>
                     <Select<Option>
                       inputId={id}
-                      options={colors}
+                      options={reposUI.length ? reposUI : []}
                       {...rest}
                       isClearable
                       />
