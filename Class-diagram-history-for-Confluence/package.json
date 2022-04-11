@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@forge/resolver": "^1.4.3",
+    "java-ast": "^0.3.0",
     "octokit": "^1.7.1"
   }
 }

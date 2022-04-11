@@ -6,6 +6,7 @@
   "dependencies": {
     "@atlaskit/button": "^16.2.2",
     "@atlaskit/css-reset": "^6.3.10",
+    "@atlaskit/datetime-picker": "^11.1.8",
     "@atlaskit/form": "^8.5.3",
     "@atlaskit/select": "^15.2.11",
     "@forge/bridge": "^2.2.0",
