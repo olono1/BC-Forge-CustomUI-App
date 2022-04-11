@@ -3,12 +3,18 @@ import { invoke } from '@forge/bridge';
 import '@atlaskit/css-reset';
 import Button from '@atlaskit/button/standard-button';
 import Select, { ValueType as Value } from '@atlaskit/select';
+import ArrowLeftCircleIcon from '@atlaskit/icon/glyph/arrow-left-circle';
+import ArrowRightCircleIcon from '@atlaskit/icon/glyph/arrow-right-circle';
+import { DatePicker } from '@atlaskit/datetime-picker';
+
+import FilterIcon from '@atlaskit/icon/glyph/filter';
+import { CheckboxSelect } from '@atlaskit/select';
 import type {
   OptionProps,
   SingleValueProps,
   ValueType,
 } from '@atlaskit/select/types';
-import Form, { ErrorMessage, Field, FormFooter } from '@atlaskit/form';
+import Form, { ErrorMessage, Field, FormFooter, ValidMessage } from '@atlaskit/form';
 
 import mermaid from 'mermaid';
 import example from "./example";
@@ -102,6 +108,13 @@ const Mermaid2 = () =>{
 }
 
 
+const Issue = () => {
+
+
+
+}
+
+
 const Mermaid = ({ name, chart, config }) => {
   
  
@@ -171,18 +184,94 @@ const getReposUserAuth = async() => {
 
 
 
+
+
 function App() {
   const [data, setData] = useState(null);
   const [reposUser, setReposUser] = useState(null);
+  const [branch, setBranch] = useState(null);
+ 
+
+  const [repoSelectedName, setRepoSelectedName] = useState(null);
+  const [gitOwner, setGitOwner] = useState(null);
+
+  //UI states
   const [reposUI, setReposUI] = useState([]);
+  const [branchesUI, setBranchesUI] = useState([]);
+  const [filesUI, setFilesUI] = useState([]);
+  const [formState, setFormState] = useState(0);
+  const [formMinDate, setFormMinDate] = useState("");
+
+  const chooseBranch = async (formData) => {
+    const selectedRepo = formData.repo;
+    setRepoSelectedName(selectedRepo);
+
+    invoke('getBranchesForRepo', {repoName: selectedRepo, owner: gitOwner}).then((branchesLog)=>{
+      console.log(branchesLog);
+      var branchesUIArr = [];
+
+      branchesLog.forEach(branch => {
+        branchesUIArr.push({label: branch.name, value:branch});
+      });
+      setBranchesUI(branchesUIArr);
+    });
+
+    setFormState(1);
+  }
+
+  const chooseFiles = async (formData) => {
+
+    setFormState(2);
+    setBranch(formData.branch.sha);
+    console.log("Choose files form data");
+    console.log(formData);
+
+    invoke('getFilesFromBranch', {sha: formData.branch.value.sha, gitOwner: gitOwner, repoSelected: repoSelectedName.value}).then((filesLog)=>{
+      console.log(filesLog);
+      var filesUIArr = [];
+
+      filesLog.forEach(file => {
+        filesUIArr.push({
+          value: file,
+          label: file.path,
+        })
+      });
+
+      setFilesUI(filesUIArr);
+
+    });
+
+
+  }
+
+  const chooseDates = async (formData) => {
+    setFormState(3);
+  }
+
+  const storeConfigData = async (formData)=>{
+    
+  }
+
+  const setMinDate = (value) =>{
+    setFormMinDate(value);
+  }
+
 
   useEffect(() => {
     invoke('getText', { example: 'my-invoke-variable' }).then(setData);
+    invoke('getGitOwner', {}).then(setGitOwner);
     invoke('getReposUserAuth', {}).then((res) => {setReposUser(res)});
     //setReposUser(async () => {return await getReposUserAuth()});
     console.log(reposUser);
     
   }, []);
+
+
+  const validateField = (value?:string)=>{
+    if(!value){
+      return 'REQUIRED';
+    }
+  }
 
   useEffect (()=>{
     
@@ -207,14 +296,14 @@ function App() {
       {reposUser ? 'Loaded' : 'Loading...ReposUser' }
 
 
-      <Form<Category>
+      {formState == 0 && (<Form<Category>
         onSubmit={(data)=>{
-          console.log('form data', data);
+         chooseBranch(data);
         }}  
         >
           {({ formProps }) =>(
             <form {...formProps}>
-              <Field<ValueType<Option>> name='colors' label='Select a color'>
+              <Field<ValueType<Option>> name='repo' label='Select repository'>
                 {({ fieldProps: { id, ...rest }, error}) =>(
                   <Fragment>
                     <Select<Option>
@@ -233,7 +322,136 @@ function App() {
             </FormFooter>
             </form>
           )}
-        </Form>
+        </Form> )}
+        {formState == 1 && (<Form<Category>
+        onSubmit={(data)=>{
+         chooseFiles(data);
+        }}  
+        >
+          {({ formProps }) =>(
+            <form {...formProps}>
+              <Field<ValueType<Option>> name='branch' label='Select repo branch'>
+                {({ fieldProps: { id, ...rest }, error}) =>(
+                  <Fragment>
+                    <Select<Option>
+                      inputId={id}
+                      options={branchesUI.length ? branchesUI : []}
+                      {...rest}
+                      isClearable
+                      />
+                  </Fragment>
+                )}
+              </Field>
+              <FormFooter>
+              <Button 
+              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+              onClick={()=>{setFormState(0)}} 
+              appearance="subtle">
+                Back: Select branch
+              </Button>
+              <Button type="submit" appearance="primary">
+                Submit
+              </Button>
+            </FormFooter>
+            </form>
+          )}
+        </Form> )}
+        {formState == 2 && (<Form<Category>
+        onSubmit={(data)=>{
+         chooseDates(data);
+        }}  
+        >
+          {({ formProps }) =>(
+            <form {...formProps}>
+              <Field<ValueType<Option>> name='file' label='Select up-to 10 files'>
+                {({ fieldProps: { id, ...rest }, error}) =>(
+                  <Fragment>
+                    <Select<Option>
+                      inputId={id}
+                      options={filesUI.length ? filesUI : []}
+                      {...rest}
+                      isClearable
+                      isMulti
+                      />
+                  </Fragment>
+                )}
+              </Field>
+              <FormFooter>
+              <Button 
+              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+              onClick={()=>{setFormState(1)}} 
+              appearance="subtle">
+                Back: Select branch
+              </Button>
+              <Button type="submit" appearance="primary">
+                Submit
+              </Button>
+ 
+            </FormFooter>
+            </form>
+          )}
+        </Form> )}
+        {formState == 3 && (<Form<Category>
+        onSubmit={(data)=>{
+         storeConfigData(data);
+        }}  
+        >
+          {({ formProps }) =>(
+            <form {...formProps}>
+            <Field
+              name="datetime-picker-from"
+              label="From date"
+              validate={validateField}
+              isRequired
+              defaultValue=""
+            >
+              {({ fieldProps, error, meta: { valid } }) => (
+              <>
+              <DatePicker {...fieldProps}  onChange={setMinDate}/>
+              {valid && (
+                <ValidMessage>You have entered a valid date</ValidMessage>
+              )}
+              {error === 'REQUIRED' && (
+                <ErrorMessage>This field is required</ErrorMessage>
+              )}
+              </>
+              )}
+              </Field>
+              <Field
+              name="datetime-picker-to"
+              label="To date"
+              validate={validateField}
+              isRequired
+              defaultValue=""
+            >
+              {({ fieldProps, error, meta: { valid } }) => (
+              <>
+              <DatePicker {...fieldProps} minDate={formMinDate}/>
+              {valid && (
+                <ValidMessage>You have entered a valid date</ValidMessage>
+              )}
+              {error === 'REQUIRED' && (
+                <ErrorMessage>This field is required</ErrorMessage>
+              )}
+              </>
+              )}
+              </Field>
+              <FormFooter>
+              <Button 
+              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+              onClick={()=>{setFormState(2)}} 
+              appearance="subtle">
+                Back: Select branch
+              </Button>
+              <Button type="submit" appearance="primary">
+                Submit
+              </Button>
+ 
+            </FormFooter>
+            </form>
+          )}
+        </Form> )}
+
 
     
 
