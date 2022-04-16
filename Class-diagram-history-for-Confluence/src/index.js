@@ -1,5 +1,6 @@
 import Resolver from '@forge/resolver';
 import { parse, createVisitor } from 'java-ast';
+import api, { route } from "@forge/api";
 
 
 const resolver = new Resolver();
@@ -16,6 +17,20 @@ resolver.define('getGitOwner', async () => {
 
 
 })
+
+resolver.define('getJiraBoards', async () =>{
+  const response = await api.asApp().requestJira(route`/rest/api/3/project/search`, {
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
+  
+  console.log(`Response: ${response.status} ${response.statusText}`);
+  console.log(await response.json());
+
+  return await response.json();
+
+});
 
 
 resolver.define('getReposUserAuth', async () => {
@@ -37,7 +52,7 @@ resolver.define('getReposUserAuth', async () => {
     reposNames.push(element.name);
   });
 
-  console.log(reposNames);
+  //console.log(reposNames);
   return reposNames;
 
 });
@@ -97,7 +112,7 @@ resolver.define('getFilesFromBranch', async (req)=>{
 
   const data_obj = JSON.parse(data);
 
-  console.log(data_obj);
+  //console.log(data_obj);
 
   var filesReponse = [];
 
@@ -113,6 +128,65 @@ resolver.define('getFilesFromBranch', async (req)=>{
   });
 
   return filesReponse;
+});
+
+
+/**
+ * files obj structure:
+ * [
+ *  {
+ *    label: 'string-file-path/',
+ *    value: {
+ *                path: 'string-file-path/',
+ *                sha: 'file-sha' 
+ *           }
+ *  }
+ * ]
+ */
+/**
+ * req.payload.owner
+ * req.payload.repo
+ * req.payload.branch_sha
+ * req.payload.files
+ * req.payload.dateFrom
+ * req.payload.dateTo
+ */
+resolver.define('processFormAndVisualize', async (req)=>{
+
+  const dateFrom = '2018-03-17T12:48:44Z';
+  const dateTo = '2022-04-10T12:48:44Z';
+  const owner = req.payload.owner;
+  const repo = req.payload.repo;
+  const files = req.payload.files;
+  const branch_sha = req.payload.branch_sha;
+
+  console.log(dateFrom);
+  console.log(dateTo);
+  console.log(owner);
+  console.log(repo);
+  console.log(files);
+  console.log(branch_sha);
+
+
+
+  var commitsObj = await getCommitsWDateRange(owner, repo, branch_sha, dateFrom, dateTo);
+
+  console.log("Number of Commits: " + commitsObj.length);
+
+  var filesForCommitsObj = await getFilesForCommits(commitsObj, files, repo);
+
+
+
+  //console.log("Calling static code analysis");
+  //getAVisitor2point0(filesForCommitsObj[0].files_all.string);
+
+
+  return filesForCommitsObj
+
+
+
+
+
 });
 
 
@@ -149,12 +223,157 @@ const getAllCommitsForFile = async (owner, repo, fileNameWExtension) => {
 
 
     getFileRaw(fileNameWExtension, sha).then((response) => {
-      console.log(response);
+      //console.log(response);
     });
 
   });
 }
 
+const getFileRaw = async (fileNamePath, ref, owner, repo) => {
+
+  //console.log("Getting file with this input");
+  //console.log(fileNamePath);
+  //console.log(ref);
+  //console.log(owner);
+  //console.log(repo);
+
+  var fileNotFound = false;
+
+  const { data } = await octokit.rest.repos.getContent({
+    mediaType: {
+      format: "raw",
+    },
+    owner: owner,
+    repo: repo,
+    path: fileNamePath,
+    ref: ref//The name of the commit/branch/tag. Default: the repository’s default branch (usually master)
+  }).catch((err)=>{
+    //console.warn("File not found " + fileNamePath);
+    //console.warn(err);
+    fileNotFound = true;
+    return [{}];
+  });
+
+
+
+
+  if(fileNotFound){
+    //console.log('File not found: ' + fileNamePath + ' -- Check index.js - the file probably does not exist.' )
+    return null;
+
+  }else{
+    return data;
+  }
+
+  
+
+}
+
+const getCommitsWDateRange = async (owner, repo, sha_branch, since, until) => {
+
+  const { data } = await octokit.rest.repos.listCommits({
+    owner: owner,
+    repo: repo,
+    sha: sha_branch,
+    since: since,
+    until: until, 
+    per_page: 10, 
+  });
+
+
+  const data_obj = JSON.parse(data);
+
+
+
+  //console.log(data_obj);
+
+  var commitsOutput = [];
+  data_obj.forEach((commitObj) => {
+
+    commitsOutput.push(
+      { 
+        sha: commitObj.sha, //commit sha: ex '6dcb09b5b57875f334f61aebed695e2e4193db5e'
+        repo_owner: owner, //the owner of the repository
+        date: commitObj.commit.committer.date, //date of commit: ex: '2011-04-14T16:00:49Z'
+        message: commitObj.commit.message, //commit message: ex 'Fix all the bugs', 
+        commiter_name: commitObj.commit.author.name, //commit author: ex 'Monalisa Octocat',
+        commiter_email: commitObj.commit.author.email //commit author email: ex. 'support@github.com'
+        
+      }
+    );
+  })
+
+  console.log(commitsOutput);
+  return commitsOutput;
+
+}
+
+
+
+/**
+ * commitsObj: Object returned from GetCommitsWDateRange()
+ * filesPaths: Object returned from user. Object structure: {file_path:'', repo:'', owner:''}
+ */
+const getFilesForCommits = async (commitsObj, filesPaths, repo ) => {
+
+  console.log("These are identified commits for the dates");
+  //console.log(commitsObj);
+
+  var FilesForCommitsObj = [];
+  var files = [];
+  console.log("Entered getFilesfroCommits. filePathsObj");
+  //console.log(filesPaths);
+  
+  for (const commitObj of commitsObj){
+
+    for (const filePath of filesPaths.file){
+      const rawFileCont = await getFileRaw(filePath.value.path, commitObj.sha, commitObj.repo_owner, repo);
+
+        //console.log(rawFileCont);
+        files.push(
+          {
+            sha: filePath.value.sha,
+            path: filePath.value.path,
+            raw: (rawFileCont !== null ? rawFileCont : '')
+          }
+        )
+
+      
+
+    }
+
+    var files_raw = [];
+
+    files.forEach((file)=>{
+      files_raw.push(file.raw);
+    })
+
+    var files_all_string = '';
+    files_all_string = files_all_string.concat(...files_raw);
+    //console.log('This is how our files look');
+    //console.log(files_all_string);
+
+    FilesForCommitsObj.push(
+      {
+        commit_sha: commitObj.sha,
+        date: commitObj.date,
+        message: commitObj.message,
+        commiter_name: commitObj.commiter_name,
+        commiter_email: commitObj.commiter_email,
+        files_all: {string: files_all_string},
+        filesArr: files
+      }
+    );
+    files = [];
+
+    //console.log('This is the whole file object');
+    //console.log(FilesForCommitsObj);
+
+  }
+
+  return FilesForCommitsObj;
+
+}
 
 
 
@@ -174,12 +393,14 @@ resolver.define('getDiagramMermaid', async (req) => {
 
 
 
+
+
 });
 
 
 
 resolver.define('getText', (req) => {
-  console.log(req);
+  //console.log(req);
 
   return 'Hello, world!';
 });
@@ -191,6 +412,7 @@ resolver.define('getText', (req) => {
 //Static analyser ANTLR functions
 
 const getAVisitor2point0 = (sourceCode) => {
+  console.log("Creating Abstract syntax tree");
   let ast = parse(sourceCode);
 
 
@@ -202,6 +424,7 @@ const getAVisitor2point0 = (sourceCode) => {
   let publicMethodGetters = [];
 
 
+  console.log("Shallow search BEGIN");
   const shallowSearch = createVisitor({ //Visitor to get All classes names and generalization
 
     visitClassDeclaration: (classDecl) => {
@@ -219,6 +442,7 @@ const getAVisitor2point0 = (sourceCode) => {
       }
     }
   }).visit(ast);
+
 
 
   createVisitor({ //Get all atributes of classes, get composition Canditdates
@@ -244,8 +468,8 @@ const getAVisitor2point0 = (sourceCode) => {
 
   }).visit(ast);
 
-  //console.log(classesFound);
-  //sconsole.log(extended);
+  console.log(classesFound);
+  console.log(extended);
   console.log(compositionCandidates);
 
 
@@ -273,9 +497,9 @@ const getAVisitor2point0 = (sourceCode) => {
 
           createVisitor({
             visitMethodDeclaration: (methodDecl) => {
-              console.log("This was found: " + methodDecl.text);
-              console.log( "The modifier is: " + activeModifier);
-              console.log("The method return type is: " + methodDecl.typeTypeOrVoid().text);
+              //console.log("This was found: " + methodDecl.text);
+              //console.log( "The modifier is: " + activeModifier);
+              //console.log("The method return type is: " + methodDecl.typeTypeOrVoid().text);
 
               if(methodDecl.typeTypeOrVoid().text !== ('void' || 'private')){
                 publicMethodGetters.push({
@@ -283,7 +507,7 @@ const getAVisitor2point0 = (sourceCode) => {
                   modifier: activeModifier,
                   returnType: methodDecl.typeTypeOrVoid().text
                 });
-                console.log("This class is not void or private - Composition relationship terminated");
+                //console.log("This class is not void or private - Composition relationship terminated");
               }
             }
           }).visit(memberDecl)
@@ -387,7 +611,7 @@ const getAVisitor2point0 = (sourceCode) => {
 
   agregation = agregation.filter((agreg) => agreg.className.length > 0);
   console.log(compositionCandidates);
-  //console.log(agregation);
+  console.log(agregation);
 
 }
 

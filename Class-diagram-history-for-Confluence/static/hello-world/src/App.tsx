@@ -6,7 +6,7 @@ import Select, { ValueType as Value } from '@atlaskit/select';
 import ArrowLeftCircleIcon from '@atlaskit/icon/glyph/arrow-left-circle';
 import ArrowRightCircleIcon from '@atlaskit/icon/glyph/arrow-right-circle';
 import { DatePicker } from '@atlaskit/datetime-picker';
-
+import { parseISO } from 'date-fns'; 
 import FilterIcon from '@atlaskit/icon/glyph/filter';
 import { CheckboxSelect } from '@atlaskit/select';
 import type {
@@ -194,13 +194,19 @@ function App() {
 
   const [repoSelectedName, setRepoSelectedName] = useState(null);
   const [gitOwner, setGitOwner] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [visualisation, setVisualisation] = useState([]);
+
 
   //UI states
   const [reposUI, setReposUI] = useState([]);
   const [branchesUI, setBranchesUI] = useState([]);
   const [filesUI, setFilesUI] = useState([]);
+  const [jiraBoards, setJiraBoards] = useState([]);
   const [formState, setFormState] = useState(0);
   const [formMinDate, setFormMinDate] = useState("");
+  const [jiraBoard, setJiraBoard] = useState('');
+
 
   const chooseBranch = async (formData) => {
     const selectedRepo = formData.repo;
@@ -227,7 +233,7 @@ function App() {
     console.log(formData);
 
     invoke('getFilesFromBranch', {sha: formData.branch.value.sha, gitOwner: gitOwner, repoSelected: repoSelectedName.value}).then((filesLog)=>{
-      console.log(filesLog);
+      console.log(filesLog); //[{path:string, sha: string}]
       var filesUIArr = [];
 
       filesLog.forEach(file => {
@@ -245,11 +251,25 @@ function App() {
   }
 
   const chooseDates = async (formData) => {
+    console.log('Files form data returned');
+    console.log(formData);
+
+    setSelectedFiles(formData);
+
     setFormState(3);
   }
 
   const storeConfigData = async (formData)=>{
-    
+
+    console.log(formData);
+
+    console.log(selectedFiles);
+    invoke('processFormAndVisualize', {owner: gitOwner, repo: repoSelectedName.value, files: selectedFiles, branch_sha: branch}).then((res) =>{
+      console.log(res);
+    });
+
+
+
   }
 
   const setMinDate = (value) =>{
@@ -261,6 +281,8 @@ function App() {
     invoke('getText', { example: 'my-invoke-variable' }).then(setData);
     invoke('getGitOwner', {}).then(setGitOwner);
     invoke('getReposUserAuth', {}).then((res) => {setReposUser(res)});
+    console
+    invoke('getJiraBoards', {}).then((res)=> {console.log(res);})
     //setReposUser(async () => {return await getReposUserAuth()});
     console.log(reposUser);
     
@@ -407,13 +429,13 @@ function App() {
             >
               {({ fieldProps, error, meta: { valid } }) => (
               <>
-              <DatePicker {...fieldProps}  onChange={setMinDate}/>
-              {valid && (
-                <ValidMessage>You have entered a valid date</ValidMessage>
-              )}
-              {error === 'REQUIRED' && (
-                <ErrorMessage>This field is required</ErrorMessage>
-              )}
+                <DatePicker {...fieldProps} dateFormat="YYYY-MM-DDTHH:MM:SSZ" parseInputValue={(date: string)=>parseISO(date)} />
+                {valid && (
+                  <ValidMessage>You have entered a valid date</ValidMessage>
+                )}
+                {error === 'REQUIRED' && (
+                  <ErrorMessage>This field is required</ErrorMessage>
+                )}
               </>
               )}
               </Field>
@@ -426,7 +448,7 @@ function App() {
             >
               {({ fieldProps, error, meta: { valid } }) => (
               <>
-              <DatePicker {...fieldProps} minDate={formMinDate}/>
+              <DatePicker {...fieldProps} dateFormat="YYYY-MM-DDTHH:MM:SSZ"/>
               {valid && (
                 <ValidMessage>You have entered a valid date</ValidMessage>
               )}
@@ -442,6 +464,41 @@ function App() {
               onClick={()=>{setFormState(2)}} 
               appearance="subtle">
                 Back: Select branch
+              </Button>
+              <Button type="submit" appearance="primary">
+                Submit
+              </Button>
+ 
+            </FormFooter>
+            </form>
+          )}
+        </Form> )}
+
+        {jiraBoard == '' && (<Form<Category>
+        onSubmit={(data)=>{
+         setJiraBoardForm(data);
+        }}  
+        >
+          {({ formProps }) =>(
+            <form {...formProps}>
+              <Field<ValueType<Option>> name='file' label='Select Jira Project'>
+                {({ fieldProps: { id, ...rest }, error}) =>(
+                  <Fragment>
+                    <Select<Option>
+                      inputId={id}
+                      options={jiraBoards.length ? jiraBoards : []}
+                      {...rest}
+                      isClearable
+                      />
+                  </Fragment>
+                )}
+              </Field>
+              <FormFooter>
+              <Button 
+              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+              onClick={()=>{setFormState(1)}} 
+              appearance="subtle">
+                Use without Jira project
               </Button>
               <Button type="submit" appearance="primary">
                 Submit
