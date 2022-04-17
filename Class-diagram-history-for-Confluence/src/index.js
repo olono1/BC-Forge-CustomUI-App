@@ -32,6 +32,21 @@ resolver.define('getJiraBoards', async () =>{
 
 });
 
+resolver.define('getJiraIssues', async (req) =>{
+    const projectKey = req.payload.projectKey;
+    console.log(projectKey);
+    const routeSearch = `/rest/api/3/search?jql=project%20%3D%20`+ projectKey;
+    const response = await api.asApp().requestJira(route `/rest/api/3/search?jql=project%20%3D%20GCDC` , {
+      headers: {
+        'Accept': 'application/json'
+      }, 
+      fields: ['issues', 'id', 'key', 'fields', 'created', 'summary', 'assignee', 'resolutiondate']
+    });
+
+    return await response.json();
+
+});
+
 
 resolver.define('getReposUserAuth', async () => {
   console.log("GITHUB calling api");
@@ -151,7 +166,7 @@ resolver.define('getFilesFromBranch', async (req)=>{
  * req.payload.dateFrom
  * req.payload.dateTo
  */
-resolver.define('processFormAndVisualize', async (req)=>{
+resolver.define('processFormGetFiles', async (req)=>{
 
   const dateFrom = '2018-03-17T12:48:44Z';
   const dateTo = '2022-04-10T12:48:44Z';
@@ -376,6 +391,52 @@ const getFilesForCommits = async (commitsObj, filesPaths, repo ) => {
 }
 
 
+/**
+ * Get the additions and deletions of all the files in a commit.
+ */
+const getCommitAdditionsAndDeletions = async (owner, repo, commit_sha) =>{
+
+  const { data } = await octokit.request('GET /repos/{owner}/{repo}/commits/{ref}', {
+    owner: owner,
+    repo: repo,
+    ref: commit_sha
+  });
+
+
+  fileChanges = [];
+
+  if(data.files !== undefined){
+
+    data.files.forEach((file)=>{
+      if(file.filename.split('.').pop() == 'java'){
+        fileChanges.push(
+          {
+            filename: file.filename,
+            sha: file.sha,
+            changes: file.changes,
+            additions: file.additions,
+            deletions: file.deletions,
+            status: file.status
+          }
+        );
+      }
+
+    });
+  }
+
+
+  console.log(fileChanges);
+
+  return fileChanges;
+
+}
+
+
+
+
+
+
+
 
 
   //Req Variables:
@@ -405,6 +466,45 @@ resolver.define('getText', (req) => {
   return 'Hello, world!';
 });
 
+
+
+const getFilesAndClasses = (filesArr) => {
+
+  var classesAndFiles = [];
+
+
+  filesObj.forEach((file)=>{
+
+    let ast = parse(file.raw);
+    var classesNodes = [];
+
+    const shallowSearch = createVisitor({ //Visitor to get All classes names and generalization
+
+      visitClassDeclaration: (classDecl) => {
+  
+        if(classDecl.IDENTIFIER() !== undefined){
+          classesFound.push({className: classDecl.IDENTIFIER().text});
+          classesNodes.push(classDecl.IDENTIFIER().text);
+        }
+      }
+    }).visit(ast);
+
+    classesAndFiles.push(
+      {
+        filePath: file.path,
+        fileSha: file.sha,
+        //fileRaw: file.raw
+        fileClasses: classesNodes
+      }
+    );
+
+
+
+  });
+
+
+
+}
 
 
 

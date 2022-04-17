@@ -1,14 +1,22 @@
 import React, { Fragment, useEffect, useState } from 'react';
+import { css, jsx } from '@emotion/core';
 import { invoke } from '@forge/bridge';
 import '@atlaskit/css-reset';
 import Button from '@atlaskit/button/standard-button';
 import Select, { ValueType as Value } from '@atlaskit/select';
 import ArrowLeftCircleIcon from '@atlaskit/icon/glyph/arrow-left-circle';
 import ArrowRightCircleIcon from '@atlaskit/icon/glyph/arrow-right-circle';
+import IssueRaiseIcon from '@atlaskit/icon/glyph/issue-raise';
+import EditorDoneIcon from '@atlaskit/icon/glyph/editor/done';
+import RecentIcon from '@atlaskit/icon/glyph/recent';
+import Avatar from '@atlaskit/avatar';
+import Tooltip from '@atlaskit/tooltip';
 import { DatePicker } from '@atlaskit/datetime-picker';
-import { parseISO } from 'date-fns'; 
+import { parseISO, Interval, differenceInDays } from 'date-fns'; 
 import FilterIcon from '@atlaskit/icon/glyph/filter';
 import { CheckboxSelect } from '@atlaskit/select';
+import Tag, { SimpleTag } from '@atlaskit/tag';
+import TagGroup from '@atlaskit/tag-group';
 import type {
   OptionProps,
   SingleValueProps,
@@ -19,6 +27,9 @@ import Form, { ErrorMessage, Field, FormFooter, ValidMessage } from '@atlaskit/f
 import mermaid from 'mermaid';
 import example from "./example";
 import SvgComponent from './SvgMermaid';
+import ProgressBar from 'react-bootstrap/ProgressBar';
+import Card from 'react-bootstrap/Card';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 
 
@@ -108,11 +119,95 @@ const Mermaid2 = () =>{
 }
 
 
-const Issue = () => {
+const ChangesBar = (props) => {
 
+  return(
+    <div>
+      <ProgressBar>
+        <ProgressBar variant="success" now={props.add*100} key={1} />
+        <ProgressBar variant="danger" now={props.del*100} key={2} />
+      </ProgressBar>
+    </div>
+  );
+}
 
+const AvatarToolTip = (props) => {
+
+  const url = props.avatarUrl;
+  const displayName = props.displayName;
+
+  return(
+    <Tooltip content={displayName}>
+      <Avatar
+        name={displayName}
+        src={url}
+        size="small"
+        label={displayName}
+      />
+    </Tooltip>
+  );
 
 }
+
+
+/**
+ * props.jiraIssueObj : contains the whole object issue returned from Jira Rest API
+ *            id: int
+ *            key: string ex. "BC-8"
+ *            fields.issuetype.name: string ex. "Task", "Bug", "Epic", "Story"
+ *            created: DateISO ex. "2022-04-09T09:20:29.237+0200"
+ *            resolution: null/Object{ name: Done }
+ *            resolutiondate: DateISO ex. "2022-04-09T09:20:29.237+0200"
+ *            summary: string ex. "Task description"
+ *            assignee.avatarUrls.16x16: string url
+ *            assignee.displayName: string ex. "Johnny Appleseed"
+ * 
+ * */
+const JiraIssue = (props) => {
+
+  console.log(props);
+  const issueKey = props.jiraIssueObj.key;
+  const issueType = props.jiraIssueObj.issueType;
+  const createdDate = props.jiraIssueObj.created;
+  const resolutionIssue = (props.jiraIssueObj.resolution? props.jiraIssueObj.resolution : '');
+  const resolutionDate = (props.jiraIssueObj.resolutionDate? props.jiraIssueObj.resolutionDate : 'In progress');
+  const issueTitle = (props.jiraIssueObj.summary? props.jiraIssueObj.summary : 'Title not provided');
+  const avatarUrl = (props.jiraIssueObj.assigneeAvatar? props.jiraIssueObj.assigneeAvatar : '');  
+  const displayName = (props.jiraIssueObj.assigneeName? props.jiraIssueObj.assigneeName : '');
+
+  const issueDuration = differenceInDays(parseISO(createdDate), parseISO(resolutionDate));
+
+  return (
+    <div>
+
+      <Card style={{ width: '18rem' }}>
+        <Card.Body>
+          <Card.Title>{issueTitle}</Card.Title>
+          <SimpleTag
+          text={createdDate}
+          elemBefore={<IssueRaiseIcon label="defined label" size="small" />}
+          />
+          <SimpleTag
+          text={resolutionDate}
+          elemBefore={<EditorDoneIcon label="defined label" size="small" />}
+          />
+          <SimpleTag
+          text={resolutionDate}
+          elemBefore={<EditorDoneIcon label="defined label" size="small" />}
+          />
+          <SimpleTag
+          text={issueDuration + (issueDuration > 1? "days":"day")}
+          elemBefore={<EditorDoneIcon label="defined label" size="small" />}
+          />
+          <AvatarToolTip 
+          avatarUrl={avatarUrl} 
+          displayName={displayName}/>
+        </Card.Body>
+      </Card>
+    </div>
+  )
+}
+
 
 
 const Mermaid = ({ name, chart, config }) => {
@@ -196,6 +291,7 @@ function App() {
   const [gitOwner, setGitOwner] = useState(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [visualisation, setVisualisation] = useState([]);
+  const [jiraIssues, setJiraIssues] = useState([]);
 
 
   //UI states
@@ -206,6 +302,9 @@ function App() {
   const [formState, setFormState] = useState(0);
   const [formMinDate, setFormMinDate] = useState("");
   const [jiraBoard, setJiraBoard] = useState('');
+  const [classesAndFilesMapping, setClassesAndFilesMapping] = useState([]);
+  const [jiraIssuesUI, setJiraIssuesUI] = useState([]);
+
 
 
   const chooseBranch = async (formData) => {
@@ -250,6 +349,32 @@ function App() {
 
   }
 
+
+  const setJiraBoardForm = async (formData) => {
+
+    var jiraIssuesApiRes = [];
+
+    invoke('getJiraIssues', {projectKey: formData.project}).then((issuesResponse)=>{
+      issuesResponse.issues.forEach((issue)=>{
+        jiraIssuesApiRes.push({
+          id: issue.id,
+          key: issue.key,
+          issueType: issue.fields.issuetype.name,
+          created: issue.fields.created,
+          resolution: issue.fields.resolution,
+          resolutiondate: issue.fields.resolutiondate,
+          summary: issue.fields.summary,
+          assigneeAvatar: (issue.fields.assignee? issue.fields.assignee.avatarUrls['16x16'] : ''),
+          assigneeName: (issue.fields.assignee? issue.fields.assignee.displayName : '')
+        });
+      });
+      
+    });
+
+    setJiraIssues(jiraIssuesApiRes);
+
+  }
+
   const chooseDates = async (formData) => {
     console.log('Files form data returned');
     console.log(formData);
@@ -264,7 +389,7 @@ function App() {
     console.log(formData);
 
     console.log(selectedFiles);
-    invoke('processFormAndVisualize', {owner: gitOwner, repo: repoSelectedName.value, files: selectedFiles, branch_sha: branch}).then((res) =>{
+    invoke('processFormGetFiles', {owner: gitOwner, repo: repoSelectedName.value, files: selectedFiles, branch_sha: branch}).then((res) =>{
       console.log(res);
     });
 
@@ -282,7 +407,16 @@ function App() {
     invoke('getGitOwner', {}).then(setGitOwner);
     invoke('getReposUserAuth', {}).then((res) => {setReposUser(res)});
     console
-    invoke('getJiraBoards', {}).then((res)=> {console.log(res);})
+    invoke('getJiraBoards', {}).then((res)=> {
+      var jiraResBoards = [];
+      res.values.forEach((board)=>{
+        jiraResBoards.push({
+          label: board.key + " " + board.name,
+          value: board.key
+        });
+      });
+      setJiraBoards(jiraResBoards);
+    })
     //setReposUser(async () => {return await getReposUserAuth()});
     console.log(reposUser);
     
@@ -308,16 +442,35 @@ function App() {
       
     }
 
-
-
   }, [reposUser])
+
+  useEffect(()=>{
+    console.log(jiraIssues);
+    const mapJiraIssues = jiraIssues.map((issue)=>
+    
+      <JiraIssue key={issue.key} jiraIssueObj={issue}/>
+    );
+    setJiraIssuesUI(jiraIssues[0]);
+    console.log(jiraIssuesUI);
+    console.log(mapJiraIssues);
+
+
+  }, [jiraIssues])
+
+
+
 
   return (
     <div>
       {data ? data : 'Loading...'}
       {reposUser ? 'Loaded' : 'Loading...ReposUser' }
-
-
+      <ChangesBar add='20' del='10'/>
+      <div>
+        
+        {jiraIssuesUI && <JiraIssue key={jiraIssuesUI.key} jiraIssueObj={jiraIssuesUI}/>}
+        
+      </div>
+      
       {formState == 0 && (<Form<Category>
         onSubmit={(data)=>{
          chooseBranch(data);
@@ -481,7 +634,7 @@ function App() {
         >
           {({ formProps }) =>(
             <form {...formProps}>
-              <Field<ValueType<Option>> name='file' label='Select Jira Project'>
+              <Field<ValueType<Option>> name='project' label='Select Jira Project'>
                 {({ fieldProps: { id, ...rest }, error}) =>(
                   <Fragment>
                     <Select<Option>

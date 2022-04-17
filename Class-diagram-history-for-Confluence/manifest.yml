@@ -23,6 +23,10 @@ permissions:
     styles:
       - unsafe-inline
   scopes:
+    - read:issue-details:jira
+    - read:audit-log:jira
+    - read:field-configuration:jira
+    - read:issue-meta:jira
     - read:issue-type:jira
     - read:project:jira
     - read:project.property:jira
