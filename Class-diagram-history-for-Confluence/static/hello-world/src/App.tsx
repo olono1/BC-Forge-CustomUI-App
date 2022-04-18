@@ -9,10 +9,14 @@ import ArrowRightCircleIcon from '@atlaskit/icon/glyph/arrow-right-circle';
 import IssueRaiseIcon from '@atlaskit/icon/glyph/issue-raise';
 import EditorDoneIcon from '@atlaskit/icon/glyph/editor/done';
 import RecentIcon from '@atlaskit/icon/glyph/recent';
+import Epic16Icon from '@atlaskit/icon-object/glyph/epic/16';
+import Story16Icon from '@atlaskit/icon-object/glyph/story/16';
+import Task16Icon from '@atlaskit/icon-object/glyph/task/16';
+import Subtask16Icon from '@atlaskit/icon-object/glyph/subtask/16'
 import Avatar from '@atlaskit/avatar';
 import Tooltip from '@atlaskit/tooltip';
 import { DatePicker } from '@atlaskit/datetime-picker';
-import { parseISO, Interval, differenceInDays } from 'date-fns'; 
+import { parseISO, Interval, differenceInDays, format } from 'date-fns'; 
 import FilterIcon from '@atlaskit/icon/glyph/filter';
 import { CheckboxSelect } from '@atlaskit/select';
 import Tag, { SimpleTag } from '@atlaskit/tag';
@@ -29,7 +33,9 @@ import example from "./example";
 import SvgComponent from './SvgMermaid';
 import ProgressBar from 'react-bootstrap/ProgressBar';
 import Card from 'react-bootstrap/Card';
+import CardGroup from 'react-bootstrap/CardGroup';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import {ScrollMenu} from 'react-horizontal-scrolling-menu';
 
 
 
@@ -168,41 +174,62 @@ const JiraIssue = (props) => {
   console.log(props);
   const issueKey = props.jiraIssueObj.key;
   const issueType = props.jiraIssueObj.issueType;
-  const createdDate = props.jiraIssueObj.created;
+  const createdDate = (props.jiraIssueObj.created? props.jiraIssueObj.created : '');
   const resolutionIssue = (props.jiraIssueObj.resolution? props.jiraIssueObj.resolution : '');
-  const resolutionDate = (props.jiraIssueObj.resolutionDate? props.jiraIssueObj.resolutionDate : 'In progress');
+  const resolutionDate = (props.jiraIssueObj.resolutiondate? props.jiraIssueObj.resolutiondate : 'In progress');
   const issueTitle = (props.jiraIssueObj.summary? props.jiraIssueObj.summary : 'Title not provided');
   const avatarUrl = (props.jiraIssueObj.assigneeAvatar? props.jiraIssueObj.assigneeAvatar : '');  
   const displayName = (props.jiraIssueObj.assigneeName? props.jiraIssueObj.assigneeName : '');
 
-  const issueDuration = differenceInDays(parseISO(createdDate), parseISO(resolutionDate));
+  const issueDuration = (resolutionIssue? (differenceInDays( parseISO(resolutionDate),parseISO(createdDate)  )) : '');
+  const issueDurationB = (resolutionIssue? (differenceInDays( parseISO(createdDate),parseISO(resolutionDate)  )) : '');
+  console.log(issueDuration);
+  console.log(issueDurationB);
+
+  const createdFormatedDate = (createdDate? format(parseISO(createdDate), 'dd. MMM yyyy'): '');
+  const resolutionFormatedDate = (resolutionIssue? format(parseISO(resolutionDate), 'dd. MMM yyyy'): '');
 
   return (
     <div>
 
-      <Card style={{ width: '18rem' }}>
+      <Card style={{ width: '18rem', height: '18em' }} border={resolutionIssue? 'success': ''}>
         <Card.Body>
           <Card.Title>{issueTitle}</Card.Title>
           <SimpleTag
-          text={createdDate}
+          text={createdFormatedDate}
           elemBefore={<IssueRaiseIcon label="defined label" size="small" />}
           />
           <SimpleTag
           text={resolutionDate}
           elemBefore={<EditorDoneIcon label="defined label" size="small" />}
           />
-          <SimpleTag
-          text={resolutionDate}
-          elemBefore={<EditorDoneIcon label="defined label" size="small" />}
-          />
-          <SimpleTag
-          text={issueDuration + (issueDuration > 1? "days":"day")}
-          elemBefore={<EditorDoneIcon label="defined label" size="small" />}
-          />
-          <AvatarToolTip 
-          avatarUrl={avatarUrl} 
-          displayName={displayName}/>
+          {resolutionIssue &&
+            <SimpleTag
+            text={issueDuration + (issueDuration > 1? "days":"day")}
+            elemBefore={<EditorDoneIcon label="defined label" size="small" />}
+            />
+          }
         </Card.Body>
+        <Card.Footer>
+            {issueType == 'Task' &&
+              <Task16Icon label="Task type"/>
+            }
+            {issueType == 'Epic' &&
+              <Epic16Icon label="Task type"/>
+            }
+            {issueType == 'Story' &&
+              <Story16Icon label="Task type"/>
+            }
+            {issueType == 'Subtask' &&
+              <Subtask16Icon label="Task type"/>
+            }
+            {
+            displayName && 
+              <AvatarToolTip 
+              avatarUrl={avatarUrl} 
+              displayName={displayName}/>
+            }
+        </Card.Footer>
       </Card>
     </div>
   )
@@ -304,6 +331,7 @@ function App() {
   const [jiraBoard, setJiraBoard] = useState('');
   const [classesAndFilesMapping, setClassesAndFilesMapping] = useState([]);
   const [jiraIssuesUI, setJiraIssuesUI] = useState([]);
+  const [jiraIssuesMapp, setJiraIssuesMapp] = useState([]);
 
 
 
@@ -353,7 +381,7 @@ function App() {
   const setJiraBoardForm = async (formData) => {
 
     var jiraIssuesApiRes = [];
-
+    setJiraBoard(formData.project);
     invoke('getJiraIssues', {projectKey: formData.project}).then((issuesResponse)=>{
       issuesResponse.issues.forEach((issue)=>{
         jiraIssuesApiRes.push({
@@ -369,9 +397,22 @@ function App() {
         });
       });
       
+      console.log(jiraIssuesApiRes);
+      setJiraIssues(jiraIssuesApiRes);
+  
+      const mapJiraIssues = jiraIssuesApiRes.map((issue)=>{
+        console.log(issue);
+        return <JiraIssue key={issue.key} jiraIssueObj={issue} itemId={issue.key}/>;
+        }    
+      );
+      console.log(jiraIssues[0]);
+      setJiraIssuesUI(jiraIssuesApiRes[0]);
+      setJiraIssuesMapp(mapJiraIssues);
+
+
     });
 
-    setJiraIssues(jiraIssuesApiRes);
+
 
   }
 
@@ -444,19 +485,23 @@ function App() {
 
   }, [reposUser])
 
+  /** 
   useEffect(()=>{
     console.log(jiraIssues);
-    const mapJiraIssues = jiraIssues.map((issue)=>
     
-      <JiraIssue key={issue.key} jiraIssueObj={issue}/>
+    const mapJiraIssues = jiraIssues.map((issue)=>{
+      console.log(issue);
+      return <JiraIssue key={issue.key} jiraIssueObj={issue}/>;
+      }    
     );
+    console.log(jiraIssues[0]);
     setJiraIssuesUI(jiraIssues[0]);
     console.log(jiraIssuesUI);
     console.log(mapJiraIssues);
 
 
   }, [jiraIssues])
-
+*/
 
 
 
@@ -468,6 +513,16 @@ function App() {
       <div>
         
         {jiraIssuesUI && <JiraIssue key={jiraIssuesUI.key} jiraIssueObj={jiraIssuesUI}/>}
+        <ScrollMenu
+          options={{
+            ratio: 0.9,
+            rootMargin: "5px",
+            threshold: [0.01, 0.05, 0.5, 0.75, 0.95, 1]
+          }}
+        >
+          {jiraIssuesMapp? jiraIssuesMapp: <div>Loading Issues...</div>}
+        </ScrollMenu>
+        
         
       </div>
       
