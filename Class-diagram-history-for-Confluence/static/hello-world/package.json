@@ -10,6 +10,7 @@
     "@atlaskit/datetime-picker": "^11.1.8",
     "@atlaskit/form": "^8.5.3",
     "@atlaskit/icon-object": "^6.2.6",
+    "@atlaskit/progress-indicator": "^9.2.3",
     "@atlaskit/select": "^15.2.11",
     "@atlaskit/tag": "^11.3.1",
     "@atlaskit/tag-group": "^10.0.11",

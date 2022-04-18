@@ -23,6 +23,9 @@ permissions:
     styles:
       - unsafe-inline
   scopes:
+    - read:field.default-value:jira
+    - read:field.option:jira
+    - read:field:jira
     - read:issue-details:jira
     - read:audit-log:jira
     - read:field-configuration:jira

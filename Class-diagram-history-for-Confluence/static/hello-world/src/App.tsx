@@ -15,6 +15,8 @@ import Task16Icon from '@atlaskit/icon-object/glyph/task/16';
 import Subtask16Icon from '@atlaskit/icon-object/glyph/subtask/16'
 import Avatar from '@atlaskit/avatar';
 import Tooltip from '@atlaskit/tooltip';
+import Spinner from '@atlaskit/spinner';
+import { ProgressIndicator } from '@atlaskit/progress-indicator';
 import { DatePicker } from '@atlaskit/datetime-picker';
 import { parseISO, Interval, differenceInDays, format } from 'date-fns'; 
 import FilterIcon from '@atlaskit/icon/glyph/filter';
@@ -157,6 +159,36 @@ const AvatarToolTip = (props) => {
 
 
 /**
+ * 
+ * @param props Contains the CommitsObj and activeCommit
+ * @returns A info panel with controls
+ */
+const ClassInfoCard = (props) => {
+
+
+  const [commitsObj, setCommitsObj] = useState([]);
+  const [activeCommit, setActiveCommit] = useState(0);
+
+  useEffect(()=>{
+    setCommitsObj(props.commitsObj);
+    setActiveCommit(props.activeCommit);
+
+  }, [props])
+
+  return(
+    <div>
+
+      <Card style={{ width: '20rem', minHeight: '13rem', margin: '5px' }}>
+        
+        <Card.Header>{props.activeCommit}</Card.Header>
+      </Card>
+
+      <p>using state {activeCommit}</p>
+    </div>
+  )
+}
+
+/**
  * props.jiraIssueObj : contains the whole object issue returned from Jira Rest API
  *            id: int
  *            key: string ex. "BC-8"
@@ -192,25 +224,35 @@ const JiraIssue = (props) => {
   return (
     <div>
 
-      <Card style={{ width: '18rem', height: '18em' }} border={resolutionIssue? 'success': ''}>
+      <Card style={{ width: '20rem', minHeight: '13rem', margin: '5px' }} border={resolutionIssue? 'success': ''}>
         <Card.Body>
           <Card.Title>{issueTitle}</Card.Title>
-          <SimpleTag
-          text={createdFormatedDate}
-          elemBefore={<IssueRaiseIcon label="defined label" size="small" />}
-          />
-          <SimpleTag
-          text={resolutionDate}
-          elemBefore={<EditorDoneIcon label="defined label" size="small" />}
-          />
-          {resolutionIssue &&
+          <Tooltip content={'Date created'}>
             <SimpleTag
-            text={issueDuration + (issueDuration > 1? "days":"day")}
+            text={createdFormatedDate}
+            elemBefore={<IssueRaiseIcon label="defined label" size="small" />}
+            />
+          </Tooltip>
+          {resolutionIssue &&
+            <Tooltip content={'Date resolved'}>
+            <SimpleTag
+            text={resolutionFormatedDate}
             elemBefore={<EditorDoneIcon label="defined label" size="small" />}
             />
+            </Tooltip>
+          }
+          
+          {resolutionIssue &&
+          <Tooltip content={'Days taken to resolve issue'}>
+            <SimpleTag
+            text={issueDuration + (issueDuration > 1? "days":"day")}
+            elemBefore={<RecentIcon label="defined label" size="small" />}
+            />
+            </Tooltip>
           }
         </Card.Body>
-        <Card.Footer>
+        <Card.Footer style={{display:'flex',justifyContent: 'space-between',alignItems: 'strech'}}>
+          <div style={{display: 'flex', alignItems:'baseline'}}>
             {issueType == 'Task' &&
               <Task16Icon label="Task type"/>
             }
@@ -223,6 +265,8 @@ const JiraIssue = (props) => {
             {issueType == 'Subtask' &&
               <Subtask16Icon label="Task type"/>
             }
+            <p style={{marginLeft: '10px', color:'grey', fontWeight: '600'}}>{issueKey}</p>
+          </div>
             {
             displayName && 
               <AvatarToolTip 
@@ -319,6 +363,7 @@ function App() {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [visualisation, setVisualisation] = useState([]);
   const [jiraIssues, setJiraIssues] = useState([]);
+  const [commitsObj, setCommitsObj] = useState([]);
 
 
   //UI states
@@ -332,6 +377,8 @@ function App() {
   const [classesAndFilesMapping, setClassesAndFilesMapping] = useState([]);
   const [jiraIssuesUI, setJiraIssuesUI] = useState([]);
   const [jiraIssuesMapp, setJiraIssuesMapp] = useState([]);
+  const [jiraLoadingSpinner, setJiraLoadingSpinner] = useState(false);
+  const [activeCommit, setActiveCommit] = useState(0);
 
 
 
@@ -379,10 +426,13 @@ function App() {
 
 
   const setJiraBoardForm = async (formData) => {
-
+    setJiraLoadingSpinner(true);
     var jiraIssuesApiRes = [];
     setJiraBoard(formData.project);
     invoke('getJiraIssues', {projectKey: formData.project}).then((issuesResponse)=>{
+
+      console.log(issuesResponse);
+
       issuesResponse.issues.forEach((issue)=>{
         jiraIssuesApiRes.push({
           id: issue.id,
@@ -408,7 +458,7 @@ function App() {
       console.log(jiraIssues[0]);
       setJiraIssuesUI(jiraIssuesApiRes[0]);
       setJiraIssuesMapp(mapJiraIssues);
-
+      setJiraLoadingSpinner(false);
 
     });
 
@@ -431,6 +481,9 @@ function App() {
 
     console.log(selectedFiles);
     invoke('processFormGetFiles', {owner: gitOwner, repo: repoSelectedName.value, files: selectedFiles, branch_sha: branch}).then((res) =>{
+      
+      setCommitsObj(res);
+      
       console.log(res);
     });
 
@@ -503,6 +556,20 @@ function App() {
   }, [jiraIssues])
 */
 
+  useEffect(()=>{
+
+    if(commitsObj != undefined && commitsObj[activeCommit] != undefined){
+      if(commitsObj[activeCommit].mapping == undefined){
+        if(commitsObj[activeCommit].changes == undefined){
+          invoke('analyseCommit', {commitInfo: commitsObj[activeCommit]}).then((res)=>{
+            console.log(res);
+          })
+        }
+      }
+    }
+
+  }, [activeCommit])
+
 
 
   return (
@@ -510,22 +577,11 @@ function App() {
       {data ? data : 'Loading...'}
       {reposUser ? 'Loaded' : 'Loading...ReposUser' }
       <ChangesBar add='20' del='10'/>
-      <div>
-        
-        {jiraIssuesUI && <JiraIssue key={jiraIssuesUI.key} jiraIssueObj={jiraIssuesUI}/>}
-        <ScrollMenu
-          options={{
-            ratio: 0.9,
-            rootMargin: "5px",
-            threshold: [0.01, 0.05, 0.5, 0.75, 0.95, 1]
-          }}
-        >
-          {jiraIssuesMapp? jiraIssuesMapp: <div>Loading Issues...</div>}
-        </ScrollMenu>
-        
-        
-      </div>
+
       
+      {commitsObj.length>0 && <ProgressIndicator selectedIndex={activeCommit} values={commitsObj} />}
+
+
       {formState == 0 && (<Form<Category>
         onSubmit={(data)=>{
          chooseBranch(data);
@@ -717,6 +773,38 @@ function App() {
           )}
         </Form> )}
 
+
+      <div>
+
+          <ClassInfoCard commitsObj={commitsObj} activeCommit={activeCommit}/>
+          <Button 
+              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+              onClick={()=>{setActiveCommit(activeCommit+1)}} 
+              appearance="subtle">
+                +1 active commit
+          </Button>
+      </div>           
+
+
+      <div>
+        {jiraLoadingSpinner &&
+          <div style={{display: 'flex', justifyContent: 'center'}}>
+          <Spinner size={'xlarge'}/>
+          </div>
+          
+        }
+        <ScrollMenu
+          options={{
+            ratio: 0.9,
+            rootMargin: "5px",
+            threshold: [0.01, 0.05, 0.5, 0.75, 0.95, 1]
+          }}
+        >
+          {jiraIssuesMapp? jiraIssuesMapp: <div>Loading Issues...</div>}
+        </ScrollMenu>
+      </div>
+
+        
 
     
 

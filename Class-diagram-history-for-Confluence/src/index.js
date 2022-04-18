@@ -33,14 +33,17 @@ resolver.define('getJiraBoards', async () =>{
 });
 
 resolver.define('getJiraIssues', async (req) =>{
-    const projectKey = req.payload.projectKey;
+    const projectKey = req.payload.projectKey.value;
     console.log(projectKey);
     const routeSearch = `/rest/api/3/search?jql=project%20%3D%20`+ projectKey;
-    const response = await api.asApp().requestJira(route `/rest/api/3/search?jql=project%20%3D%20GCDC` , {
+    console.log("route search " + routeSearch);
+    //?jql=project%20%3D%20GCDC
+    const response = await api.asApp().requestJira(route(routeSearch) , {
       headers: {
-        'Accept': 'application/json'
-      }, 
-      fields: ['issues', 'id', 'key', 'fields', 'created', 'summary', 'assignee', 'resolutiondate']
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+        fields: ['issues', 'id', 'key', 'fields', 'created', 'summary', 'assignee', 'resolutiondate']
     });
 
     return await response.json();
@@ -200,6 +203,25 @@ resolver.define('processFormGetFiles', async (req)=>{
 
 
 
+
+
+});
+
+
+resolver.define('analyseCommit', async (req)=>{
+
+
+  const commit = req.payload.commitInfo;
+
+
+
+  //File Changes
+  var classesMapping = getFilesAndClasses(commit.filesArr);
+  var filesChanges = getCommitAdditionsAndDeletions(commit.owner, commit.repo, commit.commit_sha);
+
+  return {mapping: classesMapping, changes:filesChanges};
+
+  //Mermaid static analysis
 
 
 });
@@ -373,6 +395,8 @@ const getFilesForCommits = async (commitsObj, filesPaths, repo ) => {
         commit_sha: commitObj.sha,
         date: commitObj.date,
         message: commitObj.message,
+        owner: commitObj.repo_owner,
+        repo: repo,
         commiter_name: commitObj.commiter_name,
         commiter_email: commitObj.commiter_email,
         files_all: {string: files_all_string},
@@ -404,7 +428,7 @@ const getCommitAdditionsAndDeletions = async (owner, repo, commit_sha) =>{
 
 
   fileChanges = [];
-
+  console.log(data.files);
   if(data.files !== undefined){
 
     data.files.forEach((file)=>{
@@ -416,7 +440,9 @@ const getCommitAdditionsAndDeletions = async (owner, repo, commit_sha) =>{
             changes: file.changes,
             additions: file.additions,
             deletions: file.deletions,
-            status: file.status
+            status: file.status,
+            commitAuthor: data.commit.committer.name,
+            commitAvatar: data.committer.avatar_url
           }
         );
       }
@@ -468,12 +494,20 @@ resolver.define('getText', (req) => {
 
 
 
+/**
+ * 
+ * @param {Array} filesArr : files array of objects
+ * @description Takes a files object array and map the classes to files.
+ * @returns {
+ * classesAndFiles array
+ * } 
+ */
 const getFilesAndClasses = (filesArr) => {
 
   var classesAndFiles = [];
 
 
-  filesObj.forEach((file)=>{
+  filesArr.forEach((file)=>{
 
     let ast = parse(file.raw);
     var classesNodes = [];
@@ -483,7 +517,6 @@ const getFilesAndClasses = (filesArr) => {
       visitClassDeclaration: (classDecl) => {
   
         if(classDecl.IDENTIFIER() !== undefined){
-          classesFound.push({className: classDecl.IDENTIFIER().text});
           classesNodes.push(classDecl.IDENTIFIER().text);
         }
       }
@@ -502,7 +535,7 @@ const getFilesAndClasses = (filesArr) => {
 
   });
 
-
+  return classesAndFiles;
 
 }
 
