@@ -160,7 +160,7 @@ const AvatarToolTip = (props) => {
 
 /**
  * 
- * @param props Contains the CommitsObj and activeCommit
+ * @param props Contains the commitsObj and activeCommit
  * @returns A info panel with controls
  */
 const ClassInfoCard = (props) => {
@@ -168,10 +168,12 @@ const ClassInfoCard = (props) => {
 
   const [commitsObj, setCommitsObj] = useState([]);
   const [activeCommit, setActiveCommit] = useState(0);
+  const [classTitle, setClassTitle] = useState('');
 
   useEffect(()=>{
     setCommitsObj(props.commitsObj);
     setActiveCommit(props.activeCommit);
+    //setClassTitle(props.commitsObj[props.activeCommit])
 
   }, [props])
 
@@ -180,7 +182,10 @@ const ClassInfoCard = (props) => {
 
       <Card style={{ width: '20rem', minHeight: '13rem', margin: '5px' }}>
         
-        <Card.Header>{props.activeCommit}</Card.Header>
+        <Card.Title>{classTitle? classTitle:'Loading...'}</Card.Title>
+        <Card.Body>
+          
+        </Card.Body>
       </Card>
 
       <p>using state {activeCommit}</p>

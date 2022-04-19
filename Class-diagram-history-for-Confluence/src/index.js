@@ -52,7 +52,7 @@ resolver.define('getJiraIssues', async (req) =>{
 
 
 resolver.define('getReposUserAuth', async () => {
-  console.log("GITHUB calling api");
+  //console.log("GITHUB calling api");
 
   const { data } = await octokit.rest.repos.listForAuthenticatedUser({
     affiliation: "owner", //TODO: Also accept collaborator and organization
@@ -64,7 +64,7 @@ resolver.define('getReposUserAuth', async () => {
   const data_obj = JSON.parse(data);
 
   var reposNames = [];
-  console.log("Returning data");
+  //console.log("Returning data");
 
   data_obj.forEach(element => {
     reposNames.push(element.name);
@@ -77,10 +77,10 @@ resolver.define('getReposUserAuth', async () => {
 
 resolver.define('getBranchesForRepo', async (req) => {
 
-  console.log("Getting Brancher For Repo");
+  //console.log("Getting Brancher For Repo");
 
-  console.log(req.payload.repoName.value);
-  console.log(req.payload.owner);
+  //console.log(req.payload.repoName.value);
+  //console.log(req.payload.owner);
 
 
   const repoName = req.payload.repoName.value;
@@ -94,7 +94,7 @@ resolver.define('getBranchesForRepo', async (req) => {
 
   var repoBranchesWithSha = [];
   const data_obj = JSON.parse(data);
-  console.log("GIthub RepoBranches data parsed");
+  //console.log("GIthub RepoBranches data parsed");
 
   data_obj.forEach(element => {
     var branchObj = {
@@ -117,9 +117,9 @@ resolver.define('getFilesFromBranch', async (req)=>{
   const owner = req.payload.gitOwner;
   const repo = req.payload.repoSelected;
 
-  console.log("Files generating");
-  console.log(sha + owner + repo);
-  console.log(repo);
+  //console.log("Files generating");
+  //console.log(sha + owner + repo);
+  //console.log(repo);
 
   const { data } = await octokit.rest.git.getTree({
     owner: owner,
@@ -178,13 +178,14 @@ resolver.define('processFormGetFiles', async (req)=>{
   const files = req.payload.files;
   const branch_sha = req.payload.branch_sha;
 
+  /*
   console.log(dateFrom);
   console.log(dateTo);
   console.log(owner);
   console.log(repo);
   console.log(files);
   console.log(branch_sha);
-
+*/
 
 
   var commitsObj = await getCommitsWDateRange(owner, repo, branch_sha, dateFrom, dateTo);
@@ -217,6 +218,7 @@ resolver.define('analyseCommit', async (req)=>{
 
   //File Changes
   var classesMapping = getFilesAndClasses(commit.filesArr);
+  console.log("Calling Additions and Deletion Function");
   var filesChanges = getCommitAdditionsAndDeletions(commit.owner, commit.repo, commit.commit_sha);
 
   return {mapping: classesMapping, changes:filesChanges};
@@ -340,7 +342,7 @@ const getCommitsWDateRange = async (owner, repo, sha_branch, since, until) => {
     );
   })
 
-  console.log(commitsOutput);
+  //console.log(commitsOutput);
   return commitsOutput;
 
 }
@@ -353,12 +355,12 @@ const getCommitsWDateRange = async (owner, repo, sha_branch, since, until) => {
  */
 const getFilesForCommits = async (commitsObj, filesPaths, repo ) => {
 
-  console.log("These are identified commits for the dates");
+  //console.log("These are identified commits for the dates");
   //console.log(commitsObj);
 
   var FilesForCommitsObj = [];
   var files = [];
-  console.log("Entered getFilesfroCommits. filePathsObj");
+  //console.log("Entered getFilesfroCommits. filePathsObj");
   //console.log(filesPaths);
   
   for (const commitObj of commitsObj){
@@ -420,18 +422,28 @@ const getFilesForCommits = async (commitsObj, filesPaths, repo ) => {
  */
 const getCommitAdditionsAndDeletions = async (owner, repo, commit_sha) =>{
 
-  const { data } = await octokit.request('GET /repos/{owner}/{repo}/commits/{ref}', {
+  console.log("Additions function called");
+  console.log(owner);
+  console.log(repo);
+  console.log(commit_sha);
+  
+
+  const { data } = await octokit.rest.repos.getCommit({//request('GET /repos/{owner}/{repo}/commits/{ref}', {
     owner: owner,
     repo: repo,
     ref: commit_sha
   });
 
 
-  fileChanges = [];
-  console.log(data.files);
-  if(data.files !== undefined){
+  console.log("Parsing response");
+  const data_obj = JSON.parse(data);
 
-    data.files.forEach((file)=>{
+  console.log(data);
+  fileChanges = [];
+  console.log(data_obj.files);
+  if(data_obj.files !== undefined){
+
+    data_obj.files.forEach((file)=>{
       if(file.filename.split('.').pop() == 'java'){
         fileChanges.push(
           {
@@ -441,8 +453,8 @@ const getCommitAdditionsAndDeletions = async (owner, repo, commit_sha) =>{
             additions: file.additions,
             deletions: file.deletions,
             status: file.status,
-            commitAuthor: data.commit.committer.name,
-            commitAvatar: data.committer.avatar_url
+            commitAuthor: data_obj.commit.committer.name,
+            commitAvatar: data_obj.committer.avatar_url
           }
         );
       }
@@ -451,6 +463,7 @@ const getCommitAdditionsAndDeletions = async (owner, repo, commit_sha) =>{
   }
 
 
+  console.log("These are the fileChanges");
   console.log(fileChanges);
 
   return fileChanges;
