@@ -172,7 +172,7 @@ resolver.define('getFilesFromBranch', async (req)=>{
 resolver.define('processFormGetFiles', async (req)=>{
 
   const dateFrom = '2018-03-17T12:48:44Z';
-  const dateTo = '2022-04-10T12:48:44Z';
+  const dateTo = '2022-04-28T12:48:44Z';
   const owner = req.payload.owner;
   const repo = req.payload.repo;
   const files = req.payload.files;
@@ -216,15 +216,58 @@ resolver.define('analyseCommit', async (req)=>{
 
 
 
-  //File Changes
+  //File Changes and mapping
   var classesMapping = getFilesAndClasses(commit.filesArr);
   console.log("Calling Additions and Deletion Function");
-  var filesChanges = getCommitAdditionsAndDeletions(commit.owner, commit.repo, commit.commit_sha);
+  //var filesChanges = getCommitAdditionsAndDeletions(commit.owner, commit.repo, commit.commit_sha);
 
-  return {mapping: classesMapping, changes:filesChanges};
+
+  console.log("calling github API");
+  const { data } = await octokit.rest.repos.getCommit({//request('GET /repos/{owner}/{repo}/commits/{ref}', {
+    owner: commit.owner,
+    repo: commit.repo,
+    ref: commit.commit_sha
+  });
+
+
+  console.log("called github API");
+  const data_obj = JSON.parse(data);
+  var fileChanges = [];
+
+  if(data_obj.files !== undefined){
+    console.log("making object from response");
+    data_obj.files.forEach((file)=>{
+      if(file.filename.split('.').pop() == 'java'){
+        fileChanges.push(
+          {
+            filename: file.filename,
+            sha: file.sha,
+            changes: file.changes,
+            additions: file.additions,
+            deletions: file.deletions,
+            status: file.status,
+            commitAuthor: data_obj.commit.committer.name,
+            commitAvatar: (data_obj.committer!=null ? data_obj.committer.avatar_url: ''),
+            totals: (data_obj.stats? data_obj.stats : '')
+          }
+        );
+      }
+
+    });
+  }
+
+
+
+  console.log("returning invocation");
+  
 
   //Mermaid static analysis
+  console.log("Got this code" + commit.files_all.string);
+  var mermaidCode = getAVisitor2point1(commit.files_all.string);
 
+
+
+  return {mapping: classesMapping, changes: fileChanges, mermaid: mermaidCode};
 
 });
 
@@ -556,6 +599,270 @@ const getFilesAndClasses = (filesArr) => {
 
 
 //Static analyser ANTLR functions
+
+
+
+const getAVisitor2point1 = (sourceCode) => {
+  console.log("Creating Abstract syntax tree");
+  let ast = parse(sourceCode);
+
+
+  let classesFound = [];
+  let classesFoundStr = [];
+  let extended = [];
+  let compositionCandidates = [];
+  let agregation = [];
+  let publicMethodGetters = [];
+
+
+  //console.log("Shallow search BEGIN");
+  const shallowSearch = createVisitor({ //Visitor to get All classes names and generalization
+
+    visitClassDeclaration: (classDecl) => {
+
+      if(classDecl.IDENTIFIER() !== undefined){
+        classesFound.push({className: classDecl.IDENTIFIER().text});
+        classesFoundStr.push(classDecl.IDENTIFIER().text);
+
+        if(classDecl.typeType() !== undefined){
+          extended.push({
+            className: classDecl.IDENTIFIER().text,
+            isExtendedBy: classDecl.typeType().text
+          })
+        }
+      }
+    }
+  }).visit(ast);
+
+
+
+  createVisitor({ //Get all atributes of classes, get composition Canditdates
+
+    visitClassDeclaration:(classDecl) => {
+      createVisitor({
+        visitExpression: (expression) => {
+          createVisitor({
+            visitCreator: (creator) => {
+              if(classesFoundStr.includes(creator.createdName().text)){ //If the class is part of the analysed classes only then mark it as a composition candidate
+                compositionCandidates.push({
+                  inClass: classDecl.IDENTIFIER().text,
+                  compositionedClas: creator.createdName().text,
+                  verifiedCandidate: false
+                });
+              } 
+            }
+          }).visit(expression);
+        }
+      }).visit(classDecl);
+    }
+
+
+  }).visit(ast);
+
+  //console.log(classesFound);
+  //console.log(extended);
+  //console.log(compositionCandidates);
+
+
+
+  createVisitor({
+    visitClassDeclaration: (classDecl) => {
+
+      var visitedClassName = classDecl.IDENTIFIER().text;
+      
+      
+      var currentModifier = "package-private";
+      //console.log("visitClassDeclaration " + classDecl.text); //The whole class gets printed runs for every class
+      createVisitor({
+        visitMemberDeclaration: (memberDecl) => {
+          var atributeObj = {};
+          atributeObj.nodeClass = visitedClassName;
+          var activeModifier;
+          createVisitor({
+            visitModifier: (modifier) =>{
+              activeModifier = modifier.text;
+              //console.log("---- " + modifier.text);
+            }
+          }).visit(memberDecl._parent);
+
+
+          createVisitor({
+            visitMethodDeclaration: (methodDecl) => {
+              //console.log("This was found: " + methodDecl.text);
+              //console.log( "The modifier is: " + activeModifier);
+              //console.log("The method return type is: " + methodDecl.typeTypeOrVoid().text);
+
+              if(methodDecl.typeTypeOrVoid().text !== ('void' || 'private')){
+                publicMethodGetters.push({
+                  className: visitedClassName,
+                  modifier: activeModifier,
+                  returnType: methodDecl.typeTypeOrVoid().text
+                });
+                //console.log("This class is not void or private - Composition relationship terminated");
+              }
+            }
+          }).visit(memberDecl)
+
+
+          //console.log(memberDecl.text);
+          createVisitor({
+            visitFieldDeclaration: (fieldDeclarations)=>{
+              var atributeClassType = [];
+              var atributeNames = [];
+              //console.log(fieldDeclarations.text);
+
+              if(fieldDeclarations.typeType() !== undefined && fieldDeclarations.typeType().classOrInterfaceType() !== undefined){
+
+                fieldDeclarations.variableDeclarators().variableDeclarator().forEach((declarator) => {
+                  atributeNames.push(declarator.variableDeclaratorId().IDENTIFIER().text);
+                  //console.log("name " + declarator.variableDeclaratorId().IDENTIFIER().text);
+                })
+
+                if(fieldDeclarations.typeType().classOrInterfaceType().typeArguments().length > 0){
+                  fieldDeclarations.typeType().classOrInterfaceType().typeArguments().forEach((argument) => {
+                    createVisitor({
+                      visitTypeArgument: (typeArgument) => {
+    
+                        if(typeArgument.typeType().classOrInterfaceType() !== undefined){
+                          //console.log("Modifier Current " + currentModifier);
+                          atributeClassType.push(typeArgument.typeType().classOrInterfaceType().text)
+                          //console.log(typeArgument.typeType().classOrInterfaceType().text);
+                        }
+    
+                        
+                      }
+                    }).visit(argument);
+                  });
+                }else{
+                  atributeClassType.push(fieldDeclarations.typeType().classOrInterfaceType().text);
+                  //console.log(fieldDeclarations.typeType().classOrInterfaceType().text);
+                }
+              }
+
+              atributeObj.className = atributeClassType;
+              atributeObj.modifier = activeModifier;
+              atributeObj.atributeName = atributeNames;
+              agregation.push(atributeObj);
+            }
+          }).visit(memberDecl)
+        }
+      }).visit(classDecl)
+
+      
+
+    }
+  }).visit(ast)
+
+  //console.log(publicMethodGetters);
+
+  compositionCandidates.forEach((candidate) =>{
+    var atributesOfCandidateClass = agregation.filter((atribute) => atribute.nodeClass === candidate.inClass);
+
+    var atributesOfCandidateType = atributesOfCandidateClass.filter((atribute) => {
+      var keepAtribute = false;
+      atribute.className.forEach((className)=>{
+        if(className === candidate.compositionedClas){
+          keepAtribute = true;
+        }
+      })
+      return keepAtribute;
+    })
+
+    //console.log("These atributes will be checked");
+    //console.log(atributesOfCandidateType);
+
+    var candidatePassed = true;
+    atributesOfCandidateType.forEach((atributeForCandidate) => {
+      if(atributeForCandidate.modifier !== 'private'){
+        candidatePassed = false;
+      }
+    })
+
+    publicMethodGetters.forEach((methodOponent) => {
+      //console.log("START");
+      //console.log(candidate);
+      //console.log(methodOponent);
+      //console.log("Checking composition candidate " + candidate + "oponent: " + methodOponent);
+      if(methodOponent.className === candidate.inClass){
+        //console.log("oponent Class : " + methodOponent.className + " === " + candidate.inClass + ": candidate Class") 
+        if(methodOponent.modifier !== ('private' || 'void')){
+          //console.log("oponent modifier is NOT private OR void");
+            if(candidate.compositionedClas === methodOponent.returnType){
+              //console.log("atribute type in class " + candidate.inClass + " is: " + candidate.compositionedClas + " and matches the oponent return type " + methodOponent.returnType);
+              candidatePassed = false;
+              //console.log('Composition verrification result: rejected');
+            }
+        }
+      }
+    });
+
+    candidate.verifiedCandidate = candidatePassed;
+
+  })
+
+  agregation = agregation.filter((agreg) => agreg.className.length > 0);
+  agregation = agregation.filter((agreg) => agreg.className[0] !== 'String' );
+  //console.log(compositionCandidates);
+  //console.log(agregation);
+
+
+  //console.log('Classes list');
+  //console.log(classesFound);
+  //console.log('Classes string');
+  //console.log(classesFoundStr);
+  //console.log('Extended relationships');
+  //console.log(extended);
+  //console.log('Composition candidates');
+  //console.log(compositionCandidates);
+  //console.log('Aggregations');
+  //console.log(agregation);
+  //console.log('public method getters');
+  //console.log(publicMethodGetters);
+
+  //console.log('Hello\n');
+  
+  var stringl = 'Hello\nHow\nare';
+
+  //console.log(stringl);
+
+
+  const mermaidDiagramType = 'classDiagram-v2\n';
+  const extendedMermaidArrow  = ' <|-- ';
+  const compositionMermaidArrow = ' *-- ';
+  const agregationMermaidArrow = ' o-- ';
+
+  var mermaidInput = '';
+  mermaidInput = mermaidInput.concat(mermaidDiagramType);
+
+  classesFoundStr.forEach((className)=>{
+    mermaidInput = mermaidInput.concat( 'class ', className, '\n');
+  });
+
+  extended.forEach((extendedRel)=>{
+    mermaidInput = mermaidInput.concat(extendedRel.isExtendedBy, extendedMermaidArrow, extendedRel.className, '\n');
+  });
+
+
+  agregation.forEach((aggregRel) =>{
+    aggregRel.className.forEach((aggregClassNames)=>{
+      mermaidInput = mermaidInput.concat(aggregRel.nodeClass, agregationMermaidArrow, aggregClassNames, '\n');
+    });
+  });
+
+  compositionCandidates.forEach((compositionCan) =>{
+    if(compositionCan.verifiedCandidate == true){
+      mermaidInput = mermaidInput.concat(compositionCan.inClass, compositionMermaidArrow, compositionCan.compositionedClas, '\n' );
+    }
+  });
+
+
+
+  console.log(mermaidInput);
+  return mermaidInput;
+
+}
+
+
 
 const getAVisitor2point0 = (sourceCode) => {
   console.log("Creating Abstract syntax tree");

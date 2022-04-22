@@ -1,4 +1,4 @@
-import React, { Fragment, useEffect, useState } from 'react';
+import React, { Fragment, useEffect, useRef, useState } from 'react';
 import { css, jsx } from '@emotion/core';
 import { invoke } from '@forge/bridge';
 import '@atlaskit/css-reset';
@@ -19,6 +19,7 @@ import Spinner from '@atlaskit/spinner';
 import { ProgressIndicator } from '@atlaskit/progress-indicator';
 import { DatePicker } from '@atlaskit/datetime-picker';
 import { parseISO, Interval, differenceInDays, format } from 'date-fns'; 
+import closestIndexTo from 'date-fns/closestIndexTo';
 import FilterIcon from '@atlaskit/icon/glyph/filter';
 import { CheckboxSelect } from '@atlaskit/select';
 import Tag, { SimpleTag } from '@atlaskit/tag';
@@ -37,7 +38,9 @@ import ProgressBar from 'react-bootstrap/ProgressBar';
 import Card from 'react-bootstrap/Card';
 import CardGroup from 'react-bootstrap/CardGroup';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import './mermaid.css';
 import {ScrollMenu} from 'react-horizontal-scrolling-menu';
+import { transform } from '@svgr/core'
 
 
 
@@ -84,44 +87,58 @@ const DEFAULT_CONFIG = {
   },
 }
 
-const Mermaid2 = () =>{
+const MermaidDiagram = (props) =>{
 
   const { mermaidAPI } = mermaid;
   console.warn('Here', mermaid);
 
-  var graph;
+  const [mermaidCode, setMermaidCode] = useState('');
+  const [mermaidSVG, setMermaidSVG] = useState('');
+  const [activeCommit, setActiveCommit] = useState('');
+  const svgImg = useRef();
 
-  mermaidAPI.render('the-id', `classDiagram
-    Animal <|-- Duck
-    Animal <|-- Fish
-    Animal <|-- Zebra
-    Animal : +int age
-    Animal : +String gender
-    Animal: +isMammal()
-    Animal: +mate()
-    class Duck{
-      +String beakColor
-      +swim()
-      +quack()
+  useEffect(()=>{
+    console.log("Getting the props");
+    var commitIndex = props.activeCommit;
+    if(props.activeCommit != undefined){
+      console.log("Getting active commit from props");
+      setActiveCommit(props.activeCommit);
     }
-    class Fish{
-      -int sizeInFeet
-      -canEat()
-    }
-    class Zebra{
-      +bool is_wild
-      +run()
-    }
-            
-        `, g => {
 
-          graph=g;
+    if(props.commitsObj.length >0){
+      console.log("commits object was initialised!");
+      if(props.commitsObj[commitIndex].analysis != undefined){
+        console.log("Setting the mermaid code");
+        setMermaidCode(props.commitsObj[commitIndex].analysis.mermaid);
+      }
+    }
 
-  });
+
+  }, [props]);
+
+  useEffect(()=>{
+
+    console.log("Running Mermaid API check");
+    if(mermaidCode){
+      console.log("Now calling mermaidAPI");
+      mermaidAPI.render('the-id', mermaidCode, (g)=>{
+        setMermaidSVG(g);
+
+        svgImg.current.innerHTML = g;
+
+        console.log(g);
+      });
+    }
+
+  }, [mermaidCode]);
+
+
+
+
+
 
   return(
-    <div>
-      {graph}
+    <div ref={svgImg}>
     </div>
   )
 }
@@ -129,11 +146,14 @@ const Mermaid2 = () =>{
 
 const ChangesBar = (props) => {
 
+  const add=props.add;
+  const del=props.del;
+
   return(
     <div>
       <ProgressBar>
-        <ProgressBar variant="success" now={props.add*100} key={1} />
-        <ProgressBar variant="danger" now={props.del*100} key={2} />
+        <ProgressBar variant="success" now={props.add*100} key={1} label={add} />
+        <ProgressBar variant="danger" now={props.del*100} key={2} label={del} />
       </ProgressBar>
     </div>
   );
@@ -169,21 +189,98 @@ const ClassInfoCard = (props) => {
   const [commitsObj, setCommitsObj] = useState([]);
   const [activeCommit, setActiveCommit] = useState(0);
   const [classTitle, setClassTitle] = useState('');
+  const [commitAnalysis, setCommitAnalysis] = useState(false);
+  const [selectButtons, setSelectButtons] = useState('Loading buttons...');
+  const [currentAddDel, setCurrentAddDel] = useState('');
+  const [changeAvatar, setChangeAvatar] = useState('');
 
   useEffect(()=>{
+    console.log(props.commitsObj);
+    console.log(props.activeCommit);
     setCommitsObj(props.commitsObj);
     setActiveCommit(props.activeCommit);
+    if(props.commitsObj.length>0){
+      setCommitAnalysis(props.commitsObj[props.activeCommit].analysis? props.commitsObj[props.activeCommit].analysis: '');
+    }
+    
     //setClassTitle(props.commitsObj[props.activeCommit])
 
   }, [props])
 
+  useEffect(()=>{
+
+    if(commitAnalysis){
+      const classButtons = commitAnalysis.mapping.map((classes)=>{
+        return classes.fileClasses.map((className)=>{
+          return(<Button 
+          onClick={()=>{setClassTitle(className)}} 
+          appearance="subtle">
+            {className}
+          </Button>);
+        });
+  
+      });
+      console.log("This is the Buttons object");
+      console.log(classButtons);
+      setSelectButtons(classButtons);
+
+
+
+    }else{
+      console.log("the commitAnalysis effect was triggered,but conditions were not favourable");
+      console.log(commitAnalysis);
+    }
+
+
+
+  }, [commitAnalysis]);
+
+
+  useEffect(()=>{
+
+    var classFilePath = '';
+
+    if(commitAnalysis){
+      commitAnalysis.mapping.forEach((mapClassFile)=>{
+
+        mapClassFile.fileClasses.forEach((fileClass)=>{
+          if(fileClass == classTitle){
+            classFilePath = mapClassFile.filePath;
+          }
+        });
+  
+      });
+  
+  
+      commitAnalysis.changes.forEach((change)=>{
+        if(classFilePath == change.filename){
+          setCurrentAddDel({add: change.additions, del: change.deletions});
+          setChangeAvatar({name: change.commitAuthor, avatar: change.commitAvatar});
+          console.log(changeAvatar);
+        }
+      });
+    }
+
+
+
+
+  }, [classTitle])
+
   return(
     <div>
-
+      {selectButtons.length > 0 &&
+        selectButtons
+      }
       <Card style={{ width: '20rem', minHeight: '13rem', margin: '5px' }}>
         
         <Card.Title>{classTitle? classTitle:'Loading...'}</Card.Title>
         <Card.Body>
+          {currentAddDel &&
+            <ChangesBar add={currentAddDel.add} del={currentAddDel.del}/>
+          }
+          {changeAvatar &&
+            <AvatarToolTip avatarUrl={changeAvatar.avatar} displayName={changeAvatar.name} />
+          }
           
         </Card.Body>
       </Card>
@@ -218,6 +315,9 @@ const JiraIssue = (props) => {
   const avatarUrl = (props.jiraIssueObj.assigneeAvatar? props.jiraIssueObj.assigneeAvatar : '');  
   const displayName = (props.jiraIssueObj.assigneeName? props.jiraIssueObj.assigneeName : '');
 
+  
+
+  const [hovered, setHovered] = useState(false);
   const issueDuration = (resolutionIssue? (differenceInDays( parseISO(resolutionDate),parseISO(createdDate)  )) : '');
   const issueDurationB = (resolutionIssue? (differenceInDays( parseISO(createdDate),parseISO(resolutionDate)  )) : '');
   console.log(issueDuration);
@@ -229,8 +329,19 @@ const JiraIssue = (props) => {
   return (
     <div>
 
-      <Card style={{ width: '20rem', minHeight: '13rem', margin: '5px' }} border={resolutionIssue? 'success': ''}>
-        <Card.Body>
+      <Card 
+
+      onMouseEnter={()=>{setHovered(true)}} 
+      onMouseLeave={()=>{setHovered(false)}}
+      style={{ 
+        width: (hovered? '20rem': '13em'),
+        minHeight: (hovered? '13em': '0em'), 
+        margin: '5px', 
+        transition: 'height 0.5s ease-in-out',
+      }} 
+        border={resolutionIssue? 'success': ''}>
+        
+        {hovered && <Card.Body>
           <Card.Title>{issueTitle}</Card.Title>
           <Tooltip content={'Date created'}>
             <SimpleTag
@@ -255,28 +366,33 @@ const JiraIssue = (props) => {
             />
             </Tooltip>
           }
-        </Card.Body>
-        <Card.Footer style={{display:'flex',justifyContent: 'space-between',alignItems: 'strech'}}>
-          <div style={{display: 'flex', alignItems:'baseline'}}>
-            {issueType == 'Task' &&
-              <Task16Icon label="Task type"/>
-            }
-            {issueType == 'Epic' &&
-              <Epic16Icon label="Task type"/>
-            }
-            {issueType == 'Story' &&
-              <Story16Icon label="Task type"/>
-            }
-            {issueType == 'Subtask' &&
-              <Subtask16Icon label="Task type"/>
-            }
-            <p style={{marginLeft: '10px', color:'grey', fontWeight: '600'}}>{issueKey}</p>
-          </div>
-            {
-            displayName && 
-              <AvatarToolTip 
-              avatarUrl={avatarUrl} 
-              displayName={displayName}/>
+        </Card.Body>}
+        <Card.Footer>
+          <div style={{display:'flex',justifyContent: 'space-between',alignItems: 'strech'}}>
+            <div style={{display: 'flex', alignItems:'baseline'}}>
+              {issueType == 'Task' &&
+                <Task16Icon label="Task type"/>
+              }
+              {issueType == 'Epic' &&
+                <Epic16Icon label="Task type"/>
+              }
+              {issueType == 'Story' &&
+                <Story16Icon label="Task type"/>
+              }
+              {issueType == 'Subtask' &&
+                <Subtask16Icon label="Task type"/>
+              }
+              <p style={{marginLeft: '10px', color:'grey', fontWeight: '600'}}>{issueKey}</p>
+            </div>
+              {
+              displayName && 
+                <AvatarToolTip 
+                avatarUrl={avatarUrl} 
+                displayName={displayName}/>
+              }
+            </div>
+            {!hovered && 
+              <p>{issueTitle}</p>
             }
         </Card.Footer>
       </Card>
@@ -429,6 +545,33 @@ function App() {
 
   }
 
+  const calculateCommitConnection = (issueDate) => {
+
+    if (issueDate == null){
+      return '';
+    }
+    const issueDateObj = parseISO(issueDate);
+
+
+
+    var commitDates = [];
+
+    if(commitsObj.length> 0){
+      commitsObj.forEach((commit)=>{
+        commitDates.push(parseISO(commit.date));
+      });
+    }
+
+
+    var indexClosest = closestIndexTo(issueDateObj, commitDates);
+
+
+
+    return indexClosest;
+
+
+
+  }
 
   const setJiraBoardForm = async (formData) => {
     setJiraLoadingSpinner(true);
@@ -448,7 +591,8 @@ function App() {
           resolutiondate: issue.fields.resolutiondate,
           summary: issue.fields.summary,
           assigneeAvatar: (issue.fields.assignee? issue.fields.assignee.avatarUrls['16x16'] : ''),
-          assigneeName: (issue.fields.assignee? issue.fields.assignee.displayName : '')
+          assigneeName: (issue.fields.assignee? issue.fields.assignee.displayName : ''),
+          commitConection: (commitsObj.length == 0 ? '' : calculateCommitConnection(issue.fields.resolutiondate,)),
         });
       });
       
@@ -567,11 +711,31 @@ function App() {
       if(commitsObj[activeCommit].mapping == undefined){
         if(commitsObj[activeCommit].changes == undefined){
           invoke('analyseCommit', {commitInfo: commitsObj[activeCommit]}).then((res)=>{
-            console.log(res);
+            var commitsObjUpgrade = [...commitsObj];
+            commitsObjUpgrade[activeCommit].analysis = res;
+            setCommitsObj(commitsObjUpgrade);
+            console.log(commitsObjUpgrade);
           })
         }
       }
     }
+  
+    if(jiraIssues.length > 0){
+      const mapJiraIssues = jiraIssues.map((issue)=>{
+        console.log(issue);
+        if(issue.commitConection !== '' && issue.commitConection == activeCommit){
+          return <JiraIssue key={issue.key} jiraIssueObj={issue} itemId={issue.key}/>;
+        }else{
+          return;
+        }
+
+        }    
+      );
+
+      setJiraIssuesMapp(mapJiraIssues);
+    }
+
+
 
   }, [activeCommit])
 
@@ -585,7 +749,7 @@ function App() {
 
       
       {commitsObj.length>0 && <ProgressIndicator selectedIndex={activeCommit} values={commitsObj} />}
-
+      <SvgComponent />
 
       {formState == 0 && (<Form<Category>
         onSubmit={(data)=>{
@@ -779,19 +943,26 @@ function App() {
         </Form> )}
 
 
-      <div>
-
+      <div style={{display:'flex'}}>
+          
+          <MermaidDiagram activeCommit={activeCommit} commitsObj={commitsObj}/>
           <ClassInfoCard commitsObj={commitsObj} activeCommit={activeCommit}/>
           <Button 
-              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+              iconBefore={<ArrowRightCircleIcon label="Arrow back" size="small"/>}
               onClick={()=>{setActiveCommit(activeCommit+1)}} 
               appearance="subtle">
                 +1 active commit
           </Button>
+          <Button 
+              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+              onClick={()=>{setActiveCommit(activeCommit-1)}} 
+              appearance="subtle">
+                -1 active commit
+          </Button>
       </div>           
 
 
-      <div>
+      <div style={{height: '20em'}}>
         {jiraLoadingSpinner &&
           <div style={{display: 'flex', justifyContent: 'center'}}>
           <Spinner size={'xlarge'}/>
@@ -814,10 +985,11 @@ function App() {
     
 
       <Button>Hellllo World!</Button>
-      <Mermaid chart={example} name="classDiagram-v2" />
-      <SvgComponent />
+      {/* <Mermaid chart={example} name="classDiagram-v2" />
+      
 
       <Mermaid2 />
+      */}
 
     </div>
   );

@@ -11,6 +11,7 @@ const SvgComponent = (props) => (
       fill: "#333",
     }}
     viewBox="0 0 484.25 377.594"
+    id="the-id"
     {...props}
   >
     <style />
