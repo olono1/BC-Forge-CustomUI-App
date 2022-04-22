@@ -138,7 +138,7 @@ const MermaidDiagram = (props) =>{
 
 
   return(
-    <div ref={svgImg}>
+    <div ref={svgImg} style={{width: '100%'}}>
     </div>
   )
 }
@@ -148,13 +148,22 @@ const ChangesBar = (props) => {
 
   const add=props.add;
   const del=props.del;
+  const total = props.total - add - del;
+  const noChange = ((add==0 && del==0)? true: false);
 
   return(
     <div>
-      <ProgressBar>
-        <ProgressBar variant="success" now={props.add*100} key={1} label={add} />
-        <ProgressBar variant="danger" now={props.del*100} key={2} label={del} />
-      </ProgressBar>
+      {(!noChange) && 
+        <ProgressBar>
+          <ProgressBar variant="success" now={props.add*100} key={1} label={add} />
+          <ProgressBar variant="info" now={total*100} key={2} label={"other: " + total }/>
+          <ProgressBar variant="danger" now={props.del*100} key={3} label={del} />
+        </ProgressBar>
+      }
+      {noChange && 
+        <ProgressBar variant="info" now={total*100} key={2} label={"No changes in this commit" }/>
+      }
+
     </div>
   );
 }
@@ -163,6 +172,11 @@ const AvatarToolTip = (props) => {
 
   const url = props.avatarUrl;
   const displayName = props.displayName;
+
+  useEffect(()=>{
+    console.log("Rendering avatar");
+    console.log(props);
+  }, []);
 
   return(
     <Tooltip content={displayName}>
@@ -193,6 +207,7 @@ const ClassInfoCard = (props) => {
   const [selectButtons, setSelectButtons] = useState('Loading buttons...');
   const [currentAddDel, setCurrentAddDel] = useState('');
   const [changeAvatar, setChangeAvatar] = useState('');
+  const [totalsChanges, setTotalsChanges] = useState(0);
 
   useEffect(()=>{
     console.log(props.commitsObj);
@@ -224,6 +239,8 @@ const ClassInfoCard = (props) => {
       console.log(classButtons);
       setSelectButtons(classButtons);
 
+      if(commitAnalysis.changes.length >0)
+        setTotalsChanges(commitAnalysis.changes[0].totals.total);
 
 
     }else{
@@ -252,13 +269,25 @@ const ClassInfoCard = (props) => {
       });
   
   
+      var changesFound = false;
       commitAnalysis.changes.forEach((change)=>{
         if(classFilePath == change.filename){
           setCurrentAddDel({add: change.additions, del: change.deletions});
-          setChangeAvatar({name: change.commitAuthor, avatar: change.commitAvatar});
+          setChangeAvatar({name: commitsObj[activeCommit].commiter_name, avatar: change.commitAvatar});
           console.log(changeAvatar);
+          console.log("Not changing the avatar");
+          console.log(activeCommit);
+          changesFound = true;
+          
+        }
+        else{
+          setChangeAvatar({name: commitsObj[activeCommit].commiter_name, avatar: change.commitAvatar});
         }
       });
+
+      if(!changesFound){
+        setCurrentAddDel({add: 0, del: 0});
+      }
     }
 
 
@@ -271,18 +300,20 @@ const ClassInfoCard = (props) => {
       {selectButtons.length > 0 &&
         selectButtons
       }
-      <Card style={{ width: '20rem', minHeight: '13rem', margin: '5px' }}>
-        
-        <Card.Title>{classTitle? classTitle:'Loading...'}</Card.Title>
-        <Card.Body>
-          {currentAddDel &&
-            <ChangesBar add={currentAddDel.add} del={currentAddDel.del}/>
-          }
-          {changeAvatar &&
-            <AvatarToolTip avatarUrl={changeAvatar.avatar} displayName={changeAvatar.name} />
-          }
-          
-        </Card.Body>
+      <Card style={{ width: '20rem', minHeight: '5rem', margin: '5px' }}>
+        <div style={{display: 'flex', flexDirection: 'column'}}>
+          <div style={{display: 'flex', flexDirection: 'row', alignItems: 'strech', justifyContent: 'center'}}>
+            <Card.Title>{classTitle? classTitle:'Loading...'}</Card.Title>
+            {changeAvatar &&
+                <AvatarToolTip avatarUrl={changeAvatar.avatar} displayName={changeAvatar.name} />
+              }
+          </div>
+          <Card.Body>
+            {currentAddDel &&
+              <ChangesBar add={currentAddDel.add} del={currentAddDel.del} total={totalsChanges}/>
+            }
+          </Card.Body>
+        </div>
       </Card>
 
       <p>using state {activeCommit}</p>
@@ -500,6 +531,7 @@ function App() {
   const [jiraIssuesMapp, setJiraIssuesMapp] = useState([]);
   const [jiraLoadingSpinner, setJiraLoadingSpinner] = useState(false);
   const [activeCommit, setActiveCommit] = useState(0);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
 
 
 
@@ -707,6 +739,7 @@ function App() {
 
   useEffect(()=>{
 
+    setAnalysisLoading(true);
     if(commitsObj != undefined && commitsObj[activeCommit] != undefined){
       if(commitsObj[activeCommit].mapping == undefined){
         if(commitsObj[activeCommit].changes == undefined){
@@ -715,15 +748,30 @@ function App() {
             commitsObjUpgrade[activeCommit].analysis = res;
             setCommitsObj(commitsObjUpgrade);
             console.log(commitsObjUpgrade);
+            setAnalysisLoading(false);
           })
         }
       }
     }
   
     if(jiraIssues.length > 0){
-      const mapJiraIssues = jiraIssues.map((issue)=>{
+      const filteredJiraIssues = jiraIssues.filter((issue)=>{
+        if(issue.commitConection !== '' && issue.commitConection >= activeCommit){
+          return true;
+        }else{
+          return false;
+        }
+      });
+
+      filteredJiraIssues.sort((a,b)=>{
+        return new Date(b.resolutiondate) - new Date(a.resolutiondate);
+      });
+
+      console.log(filteredJiraIssues);
+
+      const mapJiraIssues = filteredJiraIssues.map((issue)=>{
         console.log(issue);
-        if(issue.commitConection !== '' && issue.commitConection == activeCommit){
+        if(issue.commitConection !== '' && issue.commitConection >= activeCommit){
           return <JiraIssue key={issue.key} jiraIssueObj={issue} itemId={issue.key}/>;
         }else{
           return;
@@ -735,6 +783,7 @@ function App() {
       setJiraIssuesMapp(mapJiraIssues);
     }
 
+    
 
 
   }, [activeCommit])
@@ -743,254 +792,268 @@ function App() {
 
   return (
     <div>
-      {data ? data : 'Loading...'}
-      {reposUser ? 'Loaded' : 'Loading...ReposUser' }
-      <ChangesBar add='20' del='10'/>
+        {data ? data : 'Loading...'}
+        {reposUser ? 'Loaded' : 'Loading...ReposUser' }
 
-      
-      {commitsObj.length>0 && <ProgressIndicator selectedIndex={activeCommit} values={commitsObj} />}
-      <SvgComponent />
-
-      {formState == 0 && (<Form<Category>
-        onSubmit={(data)=>{
-         chooseBranch(data);
-        }}  
-        >
-          {({ formProps }) =>(
-            <form {...formProps}>
-              <Field<ValueType<Option>> name='repo' label='Select repository'>
-                {({ fieldProps: { id, ...rest }, error}) =>(
-                  <Fragment>
-                    <Select<Option>
-                      inputId={id}
-                      options={reposUI.length ? reposUI : []}
-                      {...rest}
-                      isClearable
-                      />
-                  </Fragment>
+        {formState == 0 && (<Form<Category>
+          onSubmit={(data)=>{
+          chooseBranch(data);
+          }}  
+          >
+            {({ formProps }) =>(
+              <form {...formProps}>
+                <Field<ValueType<Option>> name='repo' label='Select repository'>
+                  {({ fieldProps: { id, ...rest }, error}) =>(
+                    <Fragment>
+                      <Select<Option>
+                        inputId={id}
+                        options={reposUI.length ? reposUI : []}
+                        {...rest}
+                        isClearable
+                        />
+                    </Fragment>
+                  )}
+                </Field>
+                <FormFooter>
+                <Button type="submit" appearance="primary">
+                  Submit
+                </Button>
+              </FormFooter>
+              </form>
+            )}
+          </Form> )}
+          {formState == 1 && (<Form<Category>
+          onSubmit={(data)=>{
+          chooseFiles(data);
+          }}  
+          >
+            {({ formProps }) =>(
+              <form {...formProps}>
+                <Field<ValueType<Option>> name='branch' label='Select repo branch'>
+                  {({ fieldProps: { id, ...rest }, error}) =>(
+                    <Fragment>
+                      <Select<Option>
+                        inputId={id}
+                        options={branchesUI.length ? branchesUI : []}
+                        {...rest}
+                        isClearable
+                        />
+                    </Fragment>
+                  )}
+                </Field>
+                <FormFooter>
+                <Button 
+                iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+                onClick={()=>{setFormState(0)}} 
+                appearance="subtle">
+                  Back: Select branch
+                </Button>
+                <Button type="submit" appearance="primary">
+                  Submit
+                </Button>
+              </FormFooter>
+              </form>
+            )}
+          </Form> )}
+          {formState == 2 && (<Form<Category>
+          onSubmit={(data)=>{
+          chooseDates(data);
+          }}  
+          >
+            {({ formProps }) =>(
+              <form {...formProps}>
+                <Field<ValueType<Option>> name='file' label='Select up-to 10 files'>
+                  {({ fieldProps: { id, ...rest }, error}) =>(
+                    <Fragment>
+                      <Select<Option>
+                        inputId={id}
+                        options={filesUI.length ? filesUI : []}
+                        {...rest}
+                        isClearable
+                        isMulti
+                        />
+                    </Fragment>
+                  )}
+                </Field>
+                <FormFooter>
+                <Button 
+                iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+                onClick={()=>{setFormState(1)}} 
+                appearance="subtle">
+                  Back: Select branch
+                </Button>
+                <Button type="submit" appearance="primary">
+                  Submit
+                </Button>
+  
+              </FormFooter>
+              </form>
+            )}
+          </Form> )}
+          {formState == 3 && (<Form<Category>
+          onSubmit={(data)=>{
+          storeConfigData(data);
+          }}  
+          >
+            {({ formProps }) =>(
+              <form {...formProps}>
+              <Field
+                name="datetime-picker-from"
+                label="From date"
+                validate={validateField}
+                isRequired
+                defaultValue=""
+              >
+                {({ fieldProps, error, meta: { valid } }) => (
+                <>
+                  <DatePicker {...fieldProps} dateFormat="YYYY-MM-DDTHH:MM:SSZ" parseInputValue={(date: string)=>parseISO(date)} />
+                  {valid && (
+                    <ValidMessage>You have entered a valid date</ValidMessage>
+                  )}
+                  {error === 'REQUIRED' && (
+                    <ErrorMessage>This field is required</ErrorMessage>
+                  )}
+                </>
                 )}
-              </Field>
-              <FormFooter>
-              <Button type="submit" appearance="primary">
-                Submit
-              </Button>
-            </FormFooter>
-            </form>
-          )}
-        </Form> )}
-        {formState == 1 && (<Form<Category>
-        onSubmit={(data)=>{
-         chooseFiles(data);
-        }}  
-        >
-          {({ formProps }) =>(
-            <form {...formProps}>
-              <Field<ValueType<Option>> name='branch' label='Select repo branch'>
-                {({ fieldProps: { id, ...rest }, error}) =>(
-                  <Fragment>
-                    <Select<Option>
-                      inputId={id}
-                      options={branchesUI.length ? branchesUI : []}
-                      {...rest}
-                      isClearable
-                      />
-                  </Fragment>
-                )}
-              </Field>
-              <FormFooter>
-              <Button 
-              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
-              onClick={()=>{setFormState(0)}} 
-              appearance="subtle">
-                Back: Select branch
-              </Button>
-              <Button type="submit" appearance="primary">
-                Submit
-              </Button>
-            </FormFooter>
-            </form>
-          )}
-        </Form> )}
-        {formState == 2 && (<Form<Category>
-        onSubmit={(data)=>{
-         chooseDates(data);
-        }}  
-        >
-          {({ formProps }) =>(
-            <form {...formProps}>
-              <Field<ValueType<Option>> name='file' label='Select up-to 10 files'>
-                {({ fieldProps: { id, ...rest }, error}) =>(
-                  <Fragment>
-                    <Select<Option>
-                      inputId={id}
-                      options={filesUI.length ? filesUI : []}
-                      {...rest}
-                      isClearable
-                      isMulti
-                      />
-                  </Fragment>
-                )}
-              </Field>
-              <FormFooter>
-              <Button 
-              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
-              onClick={()=>{setFormState(1)}} 
-              appearance="subtle">
-                Back: Select branch
-              </Button>
-              <Button type="submit" appearance="primary">
-                Submit
-              </Button>
- 
-            </FormFooter>
-            </form>
-          )}
-        </Form> )}
-        {formState == 3 && (<Form<Category>
-        onSubmit={(data)=>{
-         storeConfigData(data);
-        }}  
-        >
-          {({ formProps }) =>(
-            <form {...formProps}>
-            <Field
-              name="datetime-picker-from"
-              label="From date"
-              validate={validateField}
-              isRequired
-              defaultValue=""
-            >
-              {({ fieldProps, error, meta: { valid } }) => (
-              <>
-                <DatePicker {...fieldProps} dateFormat="YYYY-MM-DDTHH:MM:SSZ" parseInputValue={(date: string)=>parseISO(date)} />
+                </Field>
+                <Field
+                name="datetime-picker-to"
+                label="To date"
+                validate={validateField}
+                isRequired
+                defaultValue=""
+              >
+                {({ fieldProps, error, meta: { valid } }) => (
+                <>
+                <DatePicker {...fieldProps} dateFormat="YYYY-MM-DDTHH:MM:SSZ"/>
                 {valid && (
                   <ValidMessage>You have entered a valid date</ValidMessage>
                 )}
                 {error === 'REQUIRED' && (
                   <ErrorMessage>This field is required</ErrorMessage>
                 )}
-              </>
-              )}
-              </Field>
-              <Field
-              name="datetime-picker-to"
-              label="To date"
-              validate={validateField}
-              isRequired
-              defaultValue=""
-            >
-              {({ fieldProps, error, meta: { valid } }) => (
-              <>
-              <DatePicker {...fieldProps} dateFormat="YYYY-MM-DDTHH:MM:SSZ"/>
-              {valid && (
-                <ValidMessage>You have entered a valid date</ValidMessage>
-              )}
-              {error === 'REQUIRED' && (
-                <ErrorMessage>This field is required</ErrorMessage>
-              )}
-              </>
-              )}
-              </Field>
-              <FormFooter>
-              <Button 
-              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
-              onClick={()=>{setFormState(2)}} 
-              appearance="subtle">
-                Back: Select branch
-              </Button>
-              <Button type="submit" appearance="primary">
-                Submit
-              </Button>
- 
-            </FormFooter>
-            </form>
-          )}
-        </Form> )}
-
-        {jiraBoard == '' && (<Form<Category>
-        onSubmit={(data)=>{
-         setJiraBoardForm(data);
-        }}  
-        >
-          {({ formProps }) =>(
-            <form {...formProps}>
-              <Field<ValueType<Option>> name='project' label='Select Jira Project'>
-                {({ fieldProps: { id, ...rest }, error}) =>(
-                  <Fragment>
-                    <Select<Option>
-                      inputId={id}
-                      options={jiraBoards.length ? jiraBoards : []}
-                      {...rest}
-                      isClearable
-                      />
-                  </Fragment>
+                </>
                 )}
-              </Field>
-              <FormFooter>
+                </Field>
+                <FormFooter>
+                <Button 
+                iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+                onClick={()=>{setFormState(2)}} 
+                appearance="subtle">
+                  Back: Select branch
+                </Button>
+                <Button type="submit" appearance="primary">
+                  Submit
+                </Button>
+  
+              </FormFooter>
+              </form>
+            )}
+          </Form> )}
+
+          {jiraBoard == '' && (<Form<Category>
+          onSubmit={(data)=>{
+          setJiraBoardForm(data);
+          }}  
+          >
+            {({ formProps }) =>(
+              <form {...formProps}>
+                <Field<ValueType<Option>> name='project' label='Select Jira Project'>
+                  {({ fieldProps: { id, ...rest }, error}) =>(
+                    <Fragment>
+                      <Select<Option>
+                        inputId={id}
+                        options={jiraBoards.length ? jiraBoards : []}
+                        {...rest}
+                        isClearable
+                        />
+                    </Fragment>
+                  )}
+                </Field>
+                <FormFooter>
+                <Button 
+                iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+                onClick={()=>{setFormState(1)}} 
+                appearance="subtle">
+                  Use without Jira project
+                </Button>
+                <Button type="submit" appearance="primary">
+                  Submit
+                </Button>
+  
+              </FormFooter>
+              </form>
+            )}
+          </Form> )}
+
+
+        <div style={{display:'flex'}}>
+            
+            <MermaidDiagram activeCommit={activeCommit} commitsObj={commitsObj}/>
+            <ClassInfoCard commitsObj={commitsObj} activeCommit={activeCommit}/>
+
+        </div>  
+        <div>{commitsObj.length>0 && <ProgressIndicator selectedIndex={activeCommit} values={commitsObj} />}</div>
+        <div>
+            {(activeCommit!=0) &&
               <Button 
-              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
-              onClick={()=>{setFormState(1)}} 
-              appearance="subtle">
-                Use without Jira project
+                iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
+                onClick={()=>{setActiveCommit(activeCommit-1)}} 
+                appearance="subtle"
+                >
+                  -1 active commit
+                
               </Button>
-              <Button type="submit" appearance="primary">
-                Submit
-              </Button>
- 
-            </FormFooter>
-            </form>
-          )}
-        </Form> )}
+            }
+          {(commitsObj.length != (activeCommit+1))&& 
+            <Button 
+                iconBefore={<ArrowRightCircleIcon label="Arrow back" size="small"/>}
+                onClick={()=>{setActiveCommit(activeCommit+1)}} 
+                appearance="subtle"
+                >
+                  +1 active commit
+                
+            </Button>
+          } 
+
+            {analysisLoading &&
+              <Spinner size={'small'}/>
+            }
+        </div>
+
+             
 
 
-      <div style={{display:'flex'}}>
+        <div style={{height: '20em'}}>
+          {jiraLoadingSpinner &&
+            <div style={{display: 'flex', justifyContent: 'center'}}>
+            <Spinner size={'xlarge'}/>
+            </div>
+            
+          }
+          <ScrollMenu
+            options={{
+              ratio: 0.9,
+              rootMargin: "5px",
+              threshold: [0.01, 0.05, 0.5, 0.75, 0.95, 1]
+            }}
+          >
+            {jiraIssuesMapp.length>0? jiraIssuesMapp: <div>No issues to show</div>}
+          </ScrollMenu>
+        </div>
+
           
-          <MermaidDiagram activeCommit={activeCommit} commitsObj={commitsObj}/>
-          <ClassInfoCard commitsObj={commitsObj} activeCommit={activeCommit}/>
-          <Button 
-              iconBefore={<ArrowRightCircleIcon label="Arrow back" size="small"/>}
-              onClick={()=>{setActiveCommit(activeCommit+1)}} 
-              appearance="subtle">
-                +1 active commit
-          </Button>
-          <Button 
-              iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
-              onClick={()=>{setActiveCommit(activeCommit-1)}} 
-              appearance="subtle">
-                -1 active commit
-          </Button>
-      </div>           
 
-
-      <div style={{height: '20em'}}>
-        {jiraLoadingSpinner &&
-          <div style={{display: 'flex', justifyContent: 'center'}}>
-          <Spinner size={'xlarge'}/>
-          </div>
-          
-        }
-        <ScrollMenu
-          options={{
-            ratio: 0.9,
-            rootMargin: "5px",
-            threshold: [0.01, 0.05, 0.5, 0.75, 0.95, 1]
-          }}
-        >
-          {jiraIssuesMapp? jiraIssuesMapp: <div>Loading Issues...</div>}
-        </ScrollMenu>
-      </div>
-
-        
-
-    
-
-      <Button>Hellllo World!</Button>
-      {/* <Mermaid chart={example} name="classDiagram-v2" />
       
 
-      <Mermaid2 />
-      */}
+        <Button>Hellllo World!</Button>
+        {/* <Mermaid chart={example} name="classDiagram-v2" />
+        
 
+        <Mermaid2 />
+        */}
+
+      
     </div>
   );
 }

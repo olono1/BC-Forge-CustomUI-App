@@ -19,6 +19,9 @@ permissions:
     fetch:
       backend:
         - "*.github.com"
+    images:
+      - '*.githubusercontent.com'
+      - '*.gravatar.com'
   content:
     styles:
       - unsafe-inline

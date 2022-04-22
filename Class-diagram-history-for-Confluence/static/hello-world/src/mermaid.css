@@ -2,6 +2,7 @@
     font-family: "trebuchet ms", verdana, arial, sans-serif;
     font-size: 16px;
     fill: #333;
+    max-width: none !important;
 }
 
 #the-id .error-icon {

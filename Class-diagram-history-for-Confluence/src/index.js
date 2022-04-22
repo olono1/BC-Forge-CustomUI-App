@@ -802,6 +802,27 @@ const getAVisitor2point1 = (sourceCode) => {
 
   agregation = agregation.filter((agreg) => agreg.className.length > 0);
   agregation = agregation.filter((agreg) => agreg.className[0] !== 'String' );
+  agregation = agregation.filter((agreg) => {
+    var returnVal = true;
+    console.log("Checking aggregation");
+    console.log(agreg);
+    compositionCandidates.forEach((compositionCandidate)=>{
+
+      if(agreg.nodeClass == compositionCandidate.inClass){
+        console.log(agreg.nodeClass + " == " + compositionCandidate.inClass);
+        agreg.className.forEach((classN) =>{
+          if(classN == compositionCandidate.compositionedClas){
+            console.log()
+            if(compositionCandidate.verifiedCandidate){
+              returnVal = false;
+              return;
+            }
+          }
+        });
+      }
+    });
+    return returnVal;
+  });
   //console.log(compositionCandidates);
   //console.log(agregation);
 
