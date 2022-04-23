@@ -35,7 +35,7 @@ resolver.define('getJiraBoards', async () =>{
 resolver.define('getJiraIssues', async (req) =>{
     const projectKey = req.payload.projectKey.value;
     console.log(projectKey);
-    const routeSearch = `/rest/api/3/search?jql=project%20%3D%20`+ projectKey;
+    const routeSearch = `/rest/api/3/search?jql=project%20%3D%20`+ projectKey + `&expand=names`;
     console.log("route search " + routeSearch);
     //?jql=project%20%3D%20GCDC
     const response = await api.asApp().requestJira(route(routeSearch) , {
