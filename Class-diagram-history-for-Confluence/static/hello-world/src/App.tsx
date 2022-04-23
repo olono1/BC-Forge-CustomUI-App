@@ -12,7 +12,8 @@ import RecentIcon from '@atlaskit/icon/glyph/recent';
 import Epic16Icon from '@atlaskit/icon-object/glyph/epic/16';
 import Story16Icon from '@atlaskit/icon-object/glyph/story/16';
 import Task16Icon from '@atlaskit/icon-object/glyph/task/16';
-import Subtask16Icon from '@atlaskit/icon-object/glyph/subtask/16'
+import Subtask16Icon from '@atlaskit/icon-object/glyph/subtask/16';
+import SprintIcon from '@atlaskit/icon/glyph/sprint';
 import Avatar from '@atlaskit/avatar';
 import Tooltip from '@atlaskit/tooltip';
 import Spinner from '@atlaskit/spinner';
@@ -96,35 +97,162 @@ const MermaidDiagram = (props) =>{
   const [mermaidSVG, setMermaidSVG] = useState('');
   const [activeCommit, setActiveCommit] = useState('');
   const svgImg = useRef();
+  const [isPastCommit, setIsPastCommit] = useState(false);
+  const [stylesObj, setStylesObj] = useState({width: '100%'});
+  const [displayDiagram, setDisplayDiagram] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(()=>{
     console.log("Getting the props");
     var commitIndex = props.activeCommit;
-    if(props.activeCommit != undefined){
+    if(props.activeCommit != undefined && props.activeCommit > -1){
       console.log("Getting active commit from props");
       setActiveCommit(props.activeCommit);
+    }else{
+      setActiveCommit(0);
+      commitIndex = 0;
+      setDisplayDiagram(false);
     }
 
+    console.log(commitIndex);
     if(props.commitsObj.length >0){
       console.log("commits object was initialised!");
       if(props.commitsObj[commitIndex].analysis != undefined){
         console.log("Setting the mermaid code");
         setMermaidCode(props.commitsObj[commitIndex].analysis.mermaid);
+      
+      }
+      if(props.commitsObj.past){
+        setIsPastCommit(true);
       }
     }
 
 
+
+
   }, [props]);
 
-  useEffect(()=>{
 
+  useEffect(()=>{
+    if(isPastCommit){
+      if(displayDiagram){
+        setStylesObj({
+          width: '100%',
+          opacity: '50%'
+        })
+      }else{
+        setStylesObj({
+          display: 'none'
+        })
+      }
+
+
+    }
+
+  }, [isPastCommit])
+
+  useEffect(()=>{
+    
     console.log("Running Mermaid API check");
     if(mermaidCode){
       console.log("Now calling mermaidAPI");
+      setIsLoading(true);
       mermaidAPI.render('the-id', mermaidCode, (g)=>{
         setMermaidSVG(g);
 
         svgImg.current.innerHTML = g;
+
+        console.log(g);
+        setIsLoading(false);
+      });
+    }
+
+  }, [mermaidCode]);
+
+
+
+
+
+
+  return(
+
+              <div ref={svgImg} style={stylesObj}>
+              </div>
+  )
+}
+
+
+const MermaidDiagramPrev = (props) =>{
+
+  const { mermaidAPI } = mermaid;
+  console.warn('Here', mermaid);
+
+  const [mermaidCode, setMermaidCode] = useState('');
+  const [mermaidSVG, setMermaidSVG] = useState('');
+  const [activeCommit, setActiveCommit] = useState('');
+  const svgImgPast = useRef();
+  const [isPastCommit, setIsPastCommit] = useState(false);
+  const [stylesObj, setStylesObj] = useState({width: '50%', opacity: '50%' });
+  const [displayDiagram, setDisplayDiagram] = useState(true);
+
+  useEffect(()=>{
+    console.log("past: Getting the props");
+    var commitIndex = props.activeCommit;
+    if(props.activeCommit != undefined && props.activeCommit > -1){
+      console.log("past: Getting active commit from props");
+      setActiveCommit(props.activeCommit);
+    }else{
+      setActiveCommit(0);
+      commitIndex = 0;
+      setDisplayDiagram(false);
+    }
+
+    console.log(commitIndex);
+    if(props.commitsObj.length >0){
+      console.log("past: commits object was initialised!");
+      if(props.commitsObj[commitIndex].analysis != undefined){
+        console.log("past: Setting the mermaid code");
+        setMermaidCode(props.commitsObj[commitIndex].analysis.mermaid);
+      
+      }
+      if(props.commitsObj.past){
+        setIsPastCommit(true);
+      }
+    }
+
+
+
+
+  }, [props]);
+
+
+  useEffect(()=>{
+    if(isPastCommit){
+      if(displayDiagram){
+        setStylesObj({
+          width: '100%',
+          opacity: '50%'
+        })
+      }else{
+        setStylesObj({
+          display: 'none'
+        })
+      }
+
+
+    }
+
+  }, [isPastCommit])
+
+  useEffect(()=>{
+
+    console.log("Past: Running Mermaid API check");
+    if(mermaidCode){
+      console.log("Past: Now calling mermaidAPI");
+      mermaidAPI.render('the-id-past', mermaidCode, (g)=>{
+        setMermaidSVG(g);
+
+        svgImgPast.current.innerHTML = g;
 
         console.log(g);
       });
@@ -138,7 +266,7 @@ const MermaidDiagram = (props) =>{
 
 
   return(
-    <div ref={svgImg} style={{width: '100%'}}>
+    <div ref={svgImgPast} style={stylesObj}>
     </div>
   )
 }
@@ -345,7 +473,8 @@ const JiraIssue = (props) => {
   const issueTitle = (props.jiraIssueObj.summary? props.jiraIssueObj.summary : 'Title not provided');
   const avatarUrl = (props.jiraIssueObj.assigneeAvatar? props.jiraIssueObj.assigneeAvatar : '');  
   const displayName = (props.jiraIssueObj.assigneeName? props.jiraIssueObj.assigneeName : '');
-
+  const sprint = (props.jiraIssueObj.sprint? props.jiraIssueObj.sprint : 'Not in sprint');
+  const storyPointsEst = (props.jiraIssueObj.storyPoints? props.jiraIssueObj.storyPoints : 'No story points added');
   
 
   const [hovered, setHovered] = useState(false);
@@ -368,7 +497,7 @@ const JiraIssue = (props) => {
         width: (hovered? '20rem': '13em'),
         minHeight: (hovered? '13em': '0em'), 
         margin: '5px', 
-        transition: 'height 0.5s ease-in-out',
+        transition: 'width 1s ease-in-out',
       }} 
         border={resolutionIssue? 'success': ''}>
         
@@ -388,6 +517,7 @@ const JiraIssue = (props) => {
             />
             </Tooltip>
           }
+
           
           {resolutionIssue &&
           <Tooltip content={'Days taken to resolve issue'}>
@@ -397,6 +527,13 @@ const JiraIssue = (props) => {
             />
             </Tooltip>
           }
+          <Tooltip content={'Story Points Est'}>
+            <SimpleTag
+            text={storyPointsEst}
+            elemBefore={<RecentIcon label="defined label" size="small" />}
+            />
+          </Tooltip>
+          
         </Card.Body>}
         <Card.Footer>
           <div style={{display:'flex',justifyContent: 'space-between',alignItems: 'strech'}}>
@@ -613,6 +750,11 @@ function App() {
 
       console.log(issuesResponse);
 
+      const sprintFieldKey = Object.keys(issuesResponse.names).find(key => issuesResponse.names[key]==="Sprint");
+      const storyPointKey = Object.keys(issuesResponse.names).find(key => issuesResponse.names[key]==="Story point estimate");
+      console.log(sprintFieldKey);
+      console.log("Estimete key" + storyPointKey);
+
       issuesResponse.issues.forEach((issue)=>{
         jiraIssuesApiRes.push({
           id: issue.id,
@@ -625,6 +767,8 @@ function App() {
           assigneeAvatar: (issue.fields.assignee? issue.fields.assignee.avatarUrls['16x16'] : ''),
           assigneeName: (issue.fields.assignee? issue.fields.assignee.displayName : ''),
           commitConection: (commitsObj.length == 0 ? '' : calculateCommitConnection(issue.fields.resolutiondate,)),
+          sprint: (issue.fields[sprintFieldKey]? issue.fields[sprintFieldKey] : ''),
+          storyPoints: (issue.fields[storyPointKey]? issue.fields[storyPointKey] : '')
         });
       });
       
@@ -739,10 +883,11 @@ function App() {
 
   useEffect(()=>{
 
-    setAnalysisLoading(true);
+    
     if(commitsObj != undefined && commitsObj[activeCommit] != undefined){
       if(commitsObj[activeCommit].mapping == undefined){
         if(commitsObj[activeCommit].changes == undefined){
+          setAnalysisLoading(true);
           invoke('analyseCommit', {commitInfo: commitsObj[activeCommit]}).then((res)=>{
             var commitsObjUpgrade = [...commitsObj];
             commitsObjUpgrade[activeCommit].analysis = res;
@@ -988,7 +1133,7 @@ function App() {
 
 
         <div style={{display:'flex'}}>
-            
+            <MermaidDiagramPrev activeCommit={activeCommit-1} commitsObj={commitsObj} past={true}/>
             <MermaidDiagram activeCommit={activeCommit} commitsObj={commitsObj}/>
             <ClassInfoCard commitsObj={commitsObj} activeCommit={activeCommit}/>
 
@@ -1007,7 +1152,7 @@ function App() {
             }
           {(commitsObj.length != (activeCommit+1))&& 
             <Button 
-                iconBefore={<ArrowRightCircleIcon label="Arrow back" size="small"/>}
+                iconAfter={<ArrowRightCircleIcon label="Arrow back" size="small"/>}
                 onClick={()=>{setActiveCommit(activeCommit+1)}} 
                 appearance="subtle"
                 >
