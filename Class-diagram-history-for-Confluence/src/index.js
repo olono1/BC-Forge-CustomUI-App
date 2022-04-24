@@ -359,7 +359,7 @@ const getCommitsWDateRange = async (owner, repo, sha_branch, since, until) => {
     sha: sha_branch,
     since: since,
     until: until, 
-    per_page: 10, 
+    per_page: 15, 
   });
 
 
@@ -384,6 +384,11 @@ const getCommitsWDateRange = async (owner, repo, sha_branch, since, until) => {
       }
     );
   })
+
+
+  commitsOutput.sort((a,b)=>{
+    return new Date(a.date) - new Date(b.date);
+  });
 
   //console.log(commitsOutput);
   return commitsOutput;

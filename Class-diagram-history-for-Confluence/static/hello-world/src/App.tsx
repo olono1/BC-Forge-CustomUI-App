@@ -14,6 +14,7 @@ import Story16Icon from '@atlaskit/icon-object/glyph/story/16';
 import Task16Icon from '@atlaskit/icon-object/glyph/task/16';
 import Subtask16Icon from '@atlaskit/icon-object/glyph/subtask/16';
 import SprintIcon from '@atlaskit/icon/glyph/sprint';
+import ArrowUpIcon from '@atlaskit/icon/glyph/arrow-up'
 import Avatar from '@atlaskit/avatar';
 import Tooltip from '@atlaskit/tooltip';
 import Spinner from '@atlaskit/spinner';
@@ -230,7 +231,7 @@ const MermaidDiagramPrev = (props) =>{
     if(isPastCommit){
       if(displayDiagram){
         setStylesObj({
-          width: '100%',
+          width: '50%',
           opacity: '50%'
         })
       }else{
@@ -289,7 +290,7 @@ const ChangesBar = (props) => {
         </ProgressBar>
       }
       {noChange && 
-        <ProgressBar variant="info" now={total*100} key={2} label={"No changes in this commit" }/>
+        <ProgressBar variant="info" now={total*100} key={1} label={"No changes in this commit" }/>
       }
 
     </div>
@@ -301,20 +302,31 @@ const AvatarToolTip = (props) => {
   const url = props.avatarUrl;
   const displayName = props.displayName;
 
+  const[showAvatar, setShowAvatar] = useState(true);
+
   useEffect(()=>{
     console.log("Rendering avatar");
     console.log(props);
+
+    if(!props.avatarUrl && !props.displayName){
+      setShowAvatar(false);
+    }
   }, []);
 
   return(
-    <Tooltip content={displayName}>
-      <Avatar
-        name={displayName}
-        src={url}
-        size="small"
-        label={displayName}
-      />
-    </Tooltip>
+    <div>
+      {showAvatar && 
+        <Tooltip content={displayName}>
+        <Avatar
+          name={displayName}
+          src={url}
+          size="small"
+          label={displayName}
+        />
+        </Tooltip>
+      }
+    </div>
+
   );
 
 }
@@ -336,6 +348,8 @@ const ClassInfoCard = (props) => {
   const [currentAddDel, setCurrentAddDel] = useState('');
   const [changeAvatar, setChangeAvatar] = useState('');
   const [totalsChanges, setTotalsChanges] = useState(0);
+
+  const [allCards, setAllCards] = useState('');
 
   useEffect(()=>{
     console.log(props.commitsObj);
@@ -365,10 +379,39 @@ const ClassInfoCard = (props) => {
       });
       console.log("This is the Buttons object");
       console.log(classButtons);
-      setSelectButtons(classButtons);
+      //setSelectButtons(classButtons);
 
       if(commitAnalysis.changes.length >0)
         setTotalsChanges(commitAnalysis.changes[0].totals.total);
+
+
+      
+      setAllCards(commitAnalysis.mapping.map((mapping)=>{
+        var returning = '';
+          if(mapping.fileClasses.length > 0){
+
+            mapping.fileClasses.forEach((fileClass)=>{
+              const classTitle = fileClass;
+              const changesObj = commitAnalysis.changes.find((change)=>{
+                console.log(change);
+                console.log("mapping");
+                console.log(mapping);
+                return change.filename == mapping.filePath;
+              })
+              console.log("The find fuction for finding the correct change");
+              console.log(changesObj);
+              if(changesObj){
+                returning = <ClassInfoCardOne classTitle={classTitle} changeAvatar={{avatar: changesObj.commitAvatar, name: props.commitsObj[props.activeCommit].commiter_name}} addDel={{add: changesObj.additions, del: changesObj.deletions }} totalsChanges={(commitAnalysis.changes.length >0 ? commitAnalysis.changes[0].totals.total : 0)}/>;
+              }else{
+                returning = <ClassInfoCardOne classTitle={classTitle} changeAvatar={{avatar:'', name:''}} addDel={{add: 0, del: 0}} totalsChanges={totalsChanges}/>;   
+              }
+
+
+            });
+          }
+        return returning;
+
+      }));
 
 
     }else{
@@ -425,29 +468,87 @@ const ClassInfoCard = (props) => {
 
   return(
     <div>
-      {selectButtons.length > 0 &&
-        selectButtons
-      }
-      <Card style={{ width: '20rem', minHeight: '5rem', margin: '5px' }}>
-        <div style={{display: 'flex', flexDirection: 'column'}}>
-          <div style={{display: 'flex', flexDirection: 'row', alignItems: 'strech', justifyContent: 'center'}}>
-            <Card.Title>{classTitle? classTitle:'Loading...'}</Card.Title>
-            {changeAvatar &&
-                <AvatarToolTip avatarUrl={changeAvatar.avatar} displayName={changeAvatar.name} />
+      {/* 
+      <div>
+        {selectButtons.length > 0 &&
+          selectButtons
+        }
+        <Card style={{ width: '20rem', minHeight: '5rem', margin: '5px' }}>
+          <div style={{display: 'flex', flexDirection: 'column'}}>
+            <div style={{display: 'flex', flexDirection: 'row', alignItems: 'strech', justifyContent: 'center'}}>
+              <Card.Title>{classTitle? classTitle:'Loading...'}</Card.Title>
+              {changeAvatar &&
+                  <AvatarToolTip avatarUrl={changeAvatar.avatar} displayName={changeAvatar.name} />
+                }
+            </div>
+            <Card.Body>
+              {currentAddDel &&
+                <ChangesBar add={currentAddDel.add} del={currentAddDel.del} total={totalsChanges}/>
               }
+            </Card.Body>
           </div>
-          <Card.Body>
-            {currentAddDel &&
-              <ChangesBar add={currentAddDel.add} del={currentAddDel.del} total={totalsChanges}/>
-            }
-          </Card.Body>
-        </div>
       </Card>
+      </div>
+            */}
+
+        
+      {allCards&&
+      <div
+      style={{
+        overflowY: "auto",
+        maxHeight: "300px",
+        display: "flex",
+        flexGrow: 1,
+        flexDirection: "column"
+      }}>
+        {allCards}
+      </div>
+      }
 
       <p>using state {activeCommit}</p>
     </div>
   )
 }
+
+
+const ClassInfoCardOne = (props) => {
+
+
+  const classTitle = props.classTitle;
+  const changeAvatar = props.changeAvatar;
+  const currentAddDel = props.addDel;
+  const totalsChanges = props.totalsChanges;
+
+  console.log(classTitle);
+  console.log(changeAvatar);
+  console.log(currentAddDel);
+  console.log(totalsChanges);
+
+
+  return (
+
+    <Card style={{ width: '20rem', minHeight: '5rem', margin: '5px' }}>
+      <div style={{display: 'flex', flexDirection: 'column'}}>
+        <div style={{display: 'flex', flexDirection: 'row', alignItems: 'strech', justifyContent: 'center'}}>
+          <Card.Title>{classTitle? classTitle:'Loading...'}</Card.Title>
+          {changeAvatar &&
+              <AvatarToolTip avatarUrl={changeAvatar.avatar} displayName={changeAvatar.name} />
+            }
+        </div>
+        <Card.Body>
+          {currentAddDel &&
+            <ChangesBar add={currentAddDel.add} del={currentAddDel.del} total={totalsChanges}/>
+          }
+        </Card.Body>
+      </div>
+    </Card>
+  );
+
+
+
+}
+
+
 
 /**
  * props.jiraIssueObj : contains the whole object issue returned from Jira Rest API
@@ -473,11 +574,14 @@ const JiraIssue = (props) => {
   const issueTitle = (props.jiraIssueObj.summary? props.jiraIssueObj.summary : 'Title not provided');
   const avatarUrl = (props.jiraIssueObj.assigneeAvatar? props.jiraIssueObj.assigneeAvatar : '');  
   const displayName = (props.jiraIssueObj.assigneeName? props.jiraIssueObj.assigneeName : '');
-  const sprint = (props.jiraIssueObj.sprint? props.jiraIssueObj.sprint : 'Not in sprint');
+  const sprint = (props.jiraIssueObj.sprint? props.jiraIssueObj.sprint : '');
   const storyPointsEst = (props.jiraIssueObj.storyPoints? props.jiraIssueObj.storyPoints : 'No story points added');
   
 
+
+
   const [hovered, setHovered] = useState(false);
+  const [commitMatch, setCommitMatch] = useState(false);
   const issueDuration = (resolutionIssue? (differenceInDays( parseISO(resolutionDate),parseISO(createdDate)  )) : '');
   const issueDurationB = (resolutionIssue? (differenceInDays( parseISO(createdDate),parseISO(resolutionDate)  )) : '');
   console.log(issueDuration);
@@ -486,13 +590,23 @@ const JiraIssue = (props) => {
   const createdFormatedDate = (createdDate? format(parseISO(createdDate), 'dd. MMM yyyy'): '');
   const resolutionFormatedDate = (resolutionIssue? format(parseISO(resolutionDate), 'dd. MMM yyyy'): '');
 
+  useEffect(()=>{
+    if(props.activeCommit == props.jiraIssueObj.commitConection){
+      setCommitMatch(true);
+      setHovered(true);
+    }
+  },[props]);
+
   return (
     <div>
 
       <Card 
 
       onMouseEnter={()=>{setHovered(true)}} 
-      onMouseLeave={()=>{setHovered(false)}}
+      onMouseLeave={()=>{
+        if(!commitMatch)
+          setHovered(false)
+      }}
       style={{ 
         width: (hovered? '20rem': '13em'),
         minHeight: (hovered? '13em': '0em'), 
@@ -529,10 +643,19 @@ const JiraIssue = (props) => {
           }
           <Tooltip content={'Story Points Est'}>
             <SimpleTag
-            text={storyPointsEst}
-            elemBefore={<RecentIcon label="defined label" size="small" />}
+            text={"Story points est.: " + storyPointsEst}
+            elemBefore={<ArrowUpIcon label="defined label" size="small" />}
             />
           </Tooltip>
+          {sprint &&
+            <Tooltip content={'Latest Sprint'}>
+              <SimpleTag
+              text={sprint[sprint.length - 1].name}
+              elemBefore={<SprintIcon label="defined label" size="small" />}
+              />
+            </Tooltip>
+          }
+
           
         </Card.Body>}
         <Card.Footer>
@@ -669,6 +792,7 @@ function App() {
   const [jiraLoadingSpinner, setJiraLoadingSpinner] = useState(false);
   const [activeCommit, setActiveCommit] = useState(0);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [filteredIssuesForCommit, setFilteredissuesForCommit] = useState([]);
 
 
 
@@ -777,7 +901,7 @@ function App() {
   
       const mapJiraIssues = jiraIssuesApiRes.map((issue)=>{
         console.log(issue);
-        return <JiraIssue key={issue.key} jiraIssueObj={issue} itemId={issue.key}/>;
+        return <JiraIssue key={issue.key} jiraIssueObj={issue} itemId={issue.key} activeCommit={activeCommit}/>;
         }    
       );
       console.log(jiraIssues[0]);
@@ -901,7 +1025,7 @@ function App() {
   
     if(jiraIssues.length > 0){
       const filteredJiraIssues = jiraIssues.filter((issue)=>{
-        if(issue.commitConection !== '' && issue.commitConection >= activeCommit){
+        if(issue.commitConection !== '' && issue.commitConection <= activeCommit){
           return true;
         }else{
           return false;
@@ -913,11 +1037,12 @@ function App() {
       });
 
       console.log(filteredJiraIssues);
+      setFilteredissuesForCommit(filteredIssuesForCommit);
 
       const mapJiraIssues = filteredJiraIssues.map((issue)=>{
         console.log(issue);
-        if(issue.commitConection !== '' && issue.commitConection >= activeCommit){
-          return <JiraIssue key={issue.key} jiraIssueObj={issue} itemId={issue.key}/>;
+        if(issue.commitConection !== '' && issue.commitConection <= activeCommit){
+          return <JiraIssue key={issue.key} jiraIssueObj={issue} itemId={issue.key} activeCommit={activeCommit}/>;
         }else{
           return;
         }
@@ -926,12 +1051,44 @@ function App() {
       );
 
       setJiraIssuesMapp(mapJiraIssues);
+      console.log(filteredIssuesForCommit);
     }
 
     
 
 
   }, [activeCommit])
+
+  const getSprintName = ()=>{
+    if(jiraIssues.length > 0){
+      const filteredJiraIssues = jiraIssues.filter((issue)=>{
+        if(issue.commitConection !== '' && issue.commitConection <= activeCommit){
+          return true;
+        }else{
+          return false;
+        }
+      });
+
+      filteredJiraIssues.sort((a,b)=>{
+        return new Date(b.resolutiondate) - new Date(a.resolutiondate);
+      });
+
+      if(filteredJiraIssues.length >0){
+        const latestIssue = filteredJiraIssues[0];
+        const sprintOfLatestIssue = latestIssue.sprint;
+        const latestSpirnt = sprintOfLatestIssue.pop();
+        console.log("Got it?! " + latestSpirnt.name);
+        return latestSpirnt.name;
+      }
+    
+    }  
+
+      console.log("No sprint so no thing to add");
+      return 'Sprint not added';
+    
+      
+  }
+
 
 
 
@@ -1131,6 +1288,13 @@ function App() {
             )}
           </Form> )}
 
+        {commitsObj.length > 0 &&
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+            <p>Commit message: {(activeCommit >= 0? commitsObj[activeCommit].message : '')}</p>
+            <p>For Sprint: SA Sprint 3</p>
+          </div>
+        }           
+
 
         <div style={{display:'flex'}}>
             <MermaidDiagramPrev activeCommit={activeCommit-1} commitsObj={commitsObj} past={true}/>
@@ -1139,7 +1303,7 @@ function App() {
 
         </div>  
         <div>{commitsObj.length>0 && <ProgressIndicator selectedIndex={activeCommit} values={commitsObj} />}</div>
-        <div>
+        <div style={{display: 'flex', justifyContent: 'space-evenly'}}>
             {(activeCommit!=0) &&
               <Button 
                 iconBefore={<ArrowLeftCircleIcon label="Arrow back" size="small"/>}
@@ -1151,6 +1315,7 @@ function App() {
               </Button>
             }
           {(commitsObj.length != (activeCommit+1))&& 
+          <div>
             <Button 
                 iconAfter={<ArrowRightCircleIcon label="Arrow back" size="small"/>}
                 onClick={()=>{setActiveCommit(activeCommit+1)}} 
@@ -1159,11 +1324,13 @@ function App() {
                   +1 active commit
                 
             </Button>
-          } 
-
             {analysisLoading &&
               <Spinner size={'small'}/>
             }
+            </div>
+          } 
+
+
         </div>
 
              
