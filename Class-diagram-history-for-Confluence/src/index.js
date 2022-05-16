@@ -395,8 +395,6 @@ const getCommitsWDateRange = async (owner, repo, sha_branch, since, until) => {
 
 }
 
-
-
 /**
  * commitsObj: Object returned from GetCommitsWDateRange()
  * filesPaths: Object returned from user. Object structure: {file_path:'', repo:'', owner:''}
@@ -517,13 +515,6 @@ const getCommitAdditionsAndDeletions = async (owner, repo, commit_sha) =>{
   return fileChanges;
 
 }
-
-
-
-
-
-
-
 
 
   //Req Variables:
