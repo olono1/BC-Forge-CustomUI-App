@@ -600,13 +600,7 @@ const getFilesAndClasses = (filesArr) => {
 
 }
 
-
-
-
 //Static analyser ANTLR functions
-
-
-
 const getAVisitor2point1 = (sourceCode) => {
   console.log("Creating Abstract syntax tree");
   let ast = parse(sourceCode);

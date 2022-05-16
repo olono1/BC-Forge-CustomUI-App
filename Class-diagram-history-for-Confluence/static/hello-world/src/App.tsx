@@ -158,6 +158,9 @@ const MermaidDiagram = (props) =>{
     if(mermaidCode){
       console.log("Now calling mermaidAPI");
       setIsLoading(true);
+      mermaidAPI.initialize({
+        themeCSS: '#extensionEnd { fill: white; }',
+      });
       mermaidAPI.render('the-id', mermaidCode, (g)=>{
         setMermaidSVG(g);
 
